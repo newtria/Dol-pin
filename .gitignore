@@ -1,0 +1,11 @@
+.DS_Store
+.idea/
+build/
+*.iml
+.dart_tool/
+.packages
+.pub/
+.env
+.env.*
+!.env.example
+*.g.dart.bak
