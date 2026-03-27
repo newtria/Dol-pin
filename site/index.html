@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="meta_title">돌핀 — K-pop 콘서트 아이템 렌탈</title>
+  <meta name="description" data-i18n-attr="content" data-i18n="meta_description" content="콘서트에서 필요한 응원봉, 슬로건, 포토카드 바인더까지. 빌려쓰고 돌려주세요.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard+Variable:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Pretendard Variable','Pretendard','-apple-system','BlinkMacSystemFont','system-ui','Roboto','Helvetica Neue','Segoe UI','Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic','sans-serif'],
+          },
+          colors: {
+            dolpin: {
+              DEFAULT: '#6C5CE7',
+              light: '#A29BFE',
+              dark: '#5A4BD1',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="font-sans antialiased overflow-x-hidden leading-relaxed">
+
+  <!-- Ambient orbs -->
+  <div class="scene" aria-hidden="true">
+    <div class="orb orb-a"></div>
+    <div class="orb orb-b"></div>
+    <div class="orb orb-c"></div>
+  </div>
+
+  <!-- Nav -->
+  <nav class="glass-nav" id="nav">
+    <div class="max-w-[1080px] mx-auto px-5 flex items-center justify-between h-full">
+      <a href="#" class="text-sm font-bold opacity-90 tracking-tight">
+        <span class="text-dolpin-light">dol</span><span class="opacity-60">pin</span>
+      </a>
+      <div class="flex items-center gap-6" id="navLinks">
+        <a href="#features" class="text-sm opacity-45 font-medium hover:opacity-90 transition-opacity" data-i18n="nav_features">Features</a>
+        <a href="#how-it-works" class="text-sm opacity-45 font-medium hover:opacity-90 transition-opacity" data-i18n="nav_how">How it works</a>
+        <a href="#download" class="text-sm opacity-45 font-medium hover:opacity-90 transition-opacity" data-i18n="nav_download">Download</a>
+        <button class="pill-btn" id="themeToggle" aria-label="Toggle theme">
+          <span class="theme-icon"></span>
+        </button>
+        <button class="pill-btn" id="langToggle" aria-label="Toggle language">
+          <span data-i18n="lang_label">KO</span>
+        </button>
+      </div>
+      <button class="nav-mobile" id="mobileToggle" aria-label="Menu"><span></span><span></span></button>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <header class="relative z-[1] pt-[calc(56px+100px)] pb-20 text-center">
+    <div class="max-w-[1080px] mx-auto px-5">
+      <p class="text-sm opacity-30 tracking-tight mb-6 reveal" data-i18n="hero_tag">K-pop Concert Item C2C Rental Marketplace</p>
+      <h1 class="text-[clamp(2.4rem,7vw,4.8rem)] font-extrabold leading-[1.08] tracking-tighter hero-h1 reveal" data-delay="60">
+        <span data-i18n="hero_line1">콘서트에서 필요한 모든 것,</span><br>
+        <span data-i18n="hero_line2">빌리세요.</span>
+      </h1>
+      <p class="mt-6 text-lg opacity-40 max-w-[48ch] mx-auto leading-relaxed reveal" data-delay="120" data-i18n="hero_p">고가의 응원봉, 한 번 쓰고 서랍 속에 넣지 마세요. 돌핀에서 빌리고, 콘서트를 즐기고, 돌려주세요.</p>
+      <div class="flex gap-3 justify-center mt-10 flex-wrap reveal" data-delay="180">
+        <a href="#download" class="lg-btn lg-btn--primary" data-i18n="hero_cta">Download the app</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Features -->
+  <section id="features" class="relative z-[1] py-10 pb-24">
+    <div class="max-w-[1080px] mx-auto px-5">
+      <h2 class="text-2xl font-bold tracking-tight text-center mb-12 reveal" data-i18n="features_title">Why dolpin?</h2>
+
+      <div class="grid grid-cols-2 gap-4 max-md:grid-cols-1" id="featureGrid">
+
+        <!-- Lightstick Rental -->
+        <div class="glass-card reveal">
+          <div class="glass-fx"></div>
+          <div class="glass-tint"></div>
+          <div class="glass-shine"></div>
+          <div class="glass-content">
+            <span class="card-icon" aria-hidden="true">🔦</span>
+            <h3 class="card-title" data-i18n="feature_lightstick_title">Lightstick Rental</h3>
+            <p class="card-desc" data-i18n="feature_lightstick_desc">Don't buy an expensive lightstick for a single concert. Rent one from a nearby fan and return it after the show.</p>
+          </div>
+        </div>
+
+        <!-- Safe Transaction -->
+        <div class="glass-card reveal" data-delay="60">
+          <div class="glass-fx"></div>
+          <div class="glass-tint"></div>
+          <div class="glass-shine"></div>
+          <div class="glass-content">
+            <span class="card-icon" aria-hidden="true">🔒</span>
+            <h3 class="card-title" data-i18n="feature_escrow_title">Safe Transaction</h3>
+            <p class="card-desc" data-i18n="feature_escrow_desc">Escrow payments keep both sides safe. Deposits are guaranteed to be refunded upon return.</p>
+          </div>
+        </div>
+
+        <!-- BT Verification -->
+        <div class="glass-card reveal" data-delay="120">
+          <div class="glass-fx"></div>
+          <div class="glass-tint"></div>
+          <div class="glass-shine"></div>
+          <div class="glass-content">
+            <span class="card-icon" aria-hidden="true">📡</span>
+            <h3 class="card-title" data-i18n="feature_bt_title">BT Verification</h3>
+            <p class="card-desc" data-i18n="feature_bt_desc">Verify official lightsticks via Bluetooth before renting. No counterfeits, no surprises.</p>
+          </div>
+        </div>
+
+        <!-- Global Support -->
+        <div class="glass-card reveal" data-delay="180">
+          <div class="glass-fx"></div>
+          <div class="glass-tint"></div>
+          <div class="glass-shine"></div>
+          <div class="glass-content">
+            <span class="card-icon" aria-hidden="true">🌏</span>
+            <h3 class="card-title" data-i18n="feature_global_title">Global Support</h3>
+            <p class="card-desc" data-i18n="feature_global_desc">Korea, Japan, Indonesia, and everywhere K-pop lives. Rent locally wherever the concert is.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section id="how-it-works" class="relative z-[1] py-10 pb-24">
+    <div class="max-w-[1080px] mx-auto px-5">
+      <h2 class="text-2xl font-bold tracking-tight text-center mb-14 reveal" data-i18n="how_title">How it works</h2>
+
+      <div class="grid grid-cols-4 gap-4 max-md:grid-cols-2 max-sm:grid-cols-1">
+
+        <div class="glass-card step-card reveal">
+          <div class="glass-fx"></div>
+          <div class="glass-tint"></div>
+          <div class="glass-shine"></div>
+          <div class="glass-content text-center items-center">
+            <span class="step-number">1</span>
+            <span class="step-icon" aria-hidden="true">🔍</span>
+            <h3 class="step-title" data-i18n="step_1_title">Search</h3>
+            <p class="step-desc" data-i18n="step_1_desc">Find lightsticks available near the concert venue.</p>
+          </div>
+        </div>
+
+        <div class="glass-card step-card reveal" data-delay="80">
+          <div class="glass-fx"></div>
+          <div class="glass-tint"></div>
+          <div class="glass-shine"></div>
+          <div class="glass-content text-center items-center">
+            <span class="step-number">2</span>
+            <span class="step-icon" aria-hidden="true">📅</span>
+            <h3 class="step-title" data-i18n="step_2_title">Reserve</h3>
+            <p class="step-desc" data-i18n="step_2_desc">Book the item and pay securely through escrow.</p>
+          </div>
+        </div>
+
+        <div class="glass-card step-card reveal" data-delay="160">
+          <div class="glass-fx"></div>
+          <div class="glass-tint"></div>
+          <div class="glass-shine"></div>
+          <div class="glass-content text-center items-center">
+            <span class="step-number">3</span>
+            <span class="step-icon" aria-hidden="true">🤝</span>
+            <h3 class="step-title" data-i18n="step_3_title">Pick up</h3>
+            <p class="step-desc" data-i18n="step_3_desc">Meet the owner and pick up your lightstick.</p>
+          </div>
+        </div>
+
+        <div class="glass-card step-card reveal" data-delay="240">
+          <div class="glass-fx"></div>
+          <div class="glass-tint"></div>
+          <div class="glass-shine"></div>
+          <div class="glass-content text-center items-center">
+            <span class="step-number">4</span>
+            <span class="step-icon" aria-hidden="true">✅</span>
+            <h3 class="step-title" data-i18n="step_4_title">Return</h3>
+            <p class="step-desc" data-i18n="step_4_desc">Return the item after the concert. Get your deposit back.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Download CTA -->
+  <section id="download" class="relative z-[1] py-10 pb-28">
+    <div class="max-w-[1080px] mx-auto px-5 text-center">
+      <div class="glass-card cta-card reveal">
+        <div class="glass-fx"></div>
+        <div class="glass-tint"></div>
+        <div class="glass-shine"></div>
+        <div class="glass-content items-center text-center py-16 px-8">
+          <h2 class="text-[clamp(1.6rem,4vw,2.4rem)] font-bold tracking-tight hero-h1 mb-4 reveal" data-delay="60" data-i18n="cta_title">Ready to rent?</h2>
+          <p class="text-base opacity-40 max-w-[44ch] mx-auto mb-10 reveal" data-delay="120" data-i18n="cta_desc">Download dolpin and find lightsticks available at your next concert.</p>
+          <div class="flex gap-4 justify-center flex-wrap reveal" data-delay="180">
+            <a href="#" class="store-btn" aria-label="App Store">
+              <svg class="store-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 21.99 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.1 21.99C7.79 22.03 6.8 20.68 5.96 19.47C4.25 16.99 2.97 12.5 4.7 9.45C5.55 7.93 7.13 6.99 8.82 6.97C10.1 6.95 11.32 7.83 12.11 7.83C12.89 7.83 14.37 6.76 15.92 6.93C16.57 6.96 18.39 7.18 19.56 8.9C19.47 8.96 17.09 10.33 17.12 13.18C17.16 16.62 20.08 17.73 20.12 17.74C20.08 17.84 19.59 19.45 18.71 19.5ZM13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.6 4.35 14.9 5.19C14.21 6.04 13.07 6.7 11.95 6.61C11.8 5.46 12.36 4.26 13 3.5Z"/></svg>
+              <div class="store-text">
+                <small data-i18n="store_download_on">Download on the</small>
+                <strong data-i18n="store_app_store">App Store</strong>
+              </div>
+            </a>
+            <a href="#" class="store-btn" aria-label="Google Play">
+              <svg class="store-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M3.61 1.814L13.793 12 3.61 22.186a.996.996 0 0 1-.61-.92V2.734a1 1 0 0 1 .61-.92zm1.393-.457L15.397 7.06l-2.928 2.928L4.29 1.81l.122-.063.591-.39zM16.8 7.86l3.2 1.78a1 1 0 0 1 0 1.72l-3.2 1.78-3.166-3.14L16.8 7.86zM5.003 22.19l8.178-8.178 2.928 2.928L5.594 22.64l-.591-.39-.122-.063.122.003z"/></svg>
+              <div class="store-text">
+                <small data-i18n="store_get_on">GET IT ON</small>
+                <strong data-i18n="store_google_play">Google Play</strong>
+              </div>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="relative z-[1] py-6 border-t border-white/[.04]">
+    <div class="max-w-[1080px] mx-auto px-5 flex justify-between text-xs opacity-20 max-sm:flex-col max-sm:gap-1 max-sm:text-center">
+      <span>dolpin.app</span>
+      <span data-i18n="footer_contact">contact@dolpin.app</span>
+    </div>
+  </footer>
+
+  <script src="i18n.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
