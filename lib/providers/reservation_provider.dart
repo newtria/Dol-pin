@@ -8,7 +8,7 @@ final borrowerReservationsProvider = FutureProvider.autoDispose
       await ref.watch(reservationRepositoryProvider).getByBorrower(borrowerId);
   return result.when(
     success: (list) => list,
-    failure: (f) => throw f,
+    failure: (f) => throw Exception('${f.runtimeType}: ${f.message}'),
   );
 });
 
@@ -18,7 +18,7 @@ final lenderReservationsProvider = FutureProvider.autoDispose
       await ref.watch(reservationRepositoryProvider).getByLender(lenderId);
   return result.when(
     success: (list) => list,
-    failure: (f) => throw f,
+    failure: (f) => throw Exception('${f.runtimeType}: ${f.message}'),
   );
 });
 
@@ -28,6 +28,6 @@ final reservationDetailProvider = FutureProvider.autoDispose
       await ref.watch(reservationRepositoryProvider).getById(id);
   return result.when(
     success: (res) => res,
-    failure: (f) => throw f,
+    failure: (f) => throw Exception('${f.runtimeType}: ${f.message}'),
   );
 });

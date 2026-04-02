@@ -11,7 +11,7 @@ final upcomingConcertsProvider = FutureProvider.autoDispose
       await ref.watch(concertRepositoryProvider).getUpcoming(country: country);
   return result.when(
     success: (concerts) => concerts,
-    failure: (f) => throw f,
+    failure: (f) => throw Exception('${f.runtimeType}: ${f.message}'),
   );
 });
 
@@ -20,7 +20,7 @@ final concertDetailProvider = FutureProvider.autoDispose
   final result = await ref.watch(concertRepositoryProvider).getById(id);
   return result.when(
     success: (concert) => concert,
-    failure: (f) => throw f,
+    failure: (f) => throw Exception('${f.runtimeType}: ${f.message}'),
   );
 });
 

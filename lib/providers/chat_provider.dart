@@ -12,6 +12,6 @@ final chatListProvider = FutureProvider.autoDispose
   final result = await ref.watch(chatRepositoryProvider).getChatList(userId);
   return result.when(
     success: (list) => list,
-    failure: (f) => throw f,
+    failure: (f) => throw Exception('${f.runtimeType}: ${f.message}'),
   );
 });

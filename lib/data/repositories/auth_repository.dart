@@ -15,12 +15,21 @@ class AuthRepository {
   AuthRepository(this._client);
   final SupabaseClient _client;
 
+  DateTime? _lastOtpRequest;
+  static const _otpCooldown = Duration(seconds: 60);
+
   User? get currentUser => _client.auth.currentUser;
   Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
 
   Future<Result<void>> signInWithOtp(String phone) async {
+    final now = DateTime.now();
+    if (_lastOtpRequest != null &&
+        now.difference(_lastOtpRequest!) < _otpCooldown) {
+      return Fail(const ValidationFailure('잠시 후 다시 시도해주세요 (60초 제한)'));
+    }
     try {
       await _client.auth.signInWithOtp(phone: phone);
+      _lastOtpRequest = now;
       return const Success(null);
     } catch (e) {
       return Fail(mapException(e));

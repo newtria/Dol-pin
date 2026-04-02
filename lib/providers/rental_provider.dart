@@ -11,7 +11,7 @@ final rentalsByConcertProvider = FutureProvider.autoDispose
       await ref.watch(rentalRepositoryProvider).getByConcert(concertId);
   return result.when(
     success: (items) => items,
-    failure: (f) => throw f,
+    failure: (f) => throw Exception('${f.runtimeType}: ${f.message}'),
   );
 });
 
@@ -21,7 +21,7 @@ final rentalsByCategoryProvider = FutureProvider.autoDispose
       await ref.watch(rentalRepositoryProvider).getByCategory(category);
   return result.when(
     success: (items) => items,
-    failure: (f) => throw f,
+    failure: (f) => throw Exception('${f.runtimeType}: ${f.message}'),
   );
 });
 
@@ -30,7 +30,7 @@ final rentalDetailProvider = FutureProvider.autoDispose
   final result = await ref.watch(rentalRepositoryProvider).getById(id);
   return result.when(
     success: (item) => item,
-    failure: (f) => throw f,
+    failure: (f) => throw Exception('${f.runtimeType}: ${f.message}'),
   );
 });
 
@@ -40,7 +40,7 @@ final myRentalsProvider = FutureProvider.autoDispose
       await ref.watch(rentalRepositoryProvider).getByLender(lenderId);
   return result.when(
     success: (items) => items,
-    failure: (f) => throw f,
+    failure: (f) => throw Exception('${f.runtimeType}: ${f.message}'),
   );
 });
 
@@ -49,7 +49,7 @@ final rentalSearchProvider = FutureProvider.autoDispose
   final result = await ref.watch(rentalRepositoryProvider).search(query);
   return result.when(
     success: (items) => items,
-    failure: (f) => throw f,
+    failure: (f) => throw Exception('${f.runtimeType}: ${f.message}'),
   );
 });
 
