@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -14,8 +16,33 @@ class MockSupabaseQueryBuilder extends Mock implements SupabaseQueryBuilder {}
 class MockPostgrestFilterBuilder extends Mock
     implements PostgrestFilterBuilder {}
 
-class MockPostgrestTransformBuilder extends Mock
-    implements PostgrestTransformBuilder<Map<String, dynamic>> {}
+/// A fake [PostgrestBuilder] that resolves to [_value] when awaited.
+class FakePostgrestResponse<T> extends Fake implements PostgrestBuilder<T> {
+  final T _value;
+  FakePostgrestResponse(this._value);
+
+  @override
+  Future<S> then<S>(FutureOr<S> Function(T value) onValue,
+          {Function? onError}) =>
+      Future<T>.value(_value).then(onValue, onError: onError);
+
+  @override
+  Future<T> catchError(Function onError,
+          {bool Function(Object error)? test}) =>
+      Future<T>.value(_value);
+
+  @override
+  Future<T> whenComplete(FutureOr<void> Function() action) =>
+      Future<T>.value(_value).whenComplete(action);
+
+  @override
+  Stream<T> asStream() => Stream.value(_value);
+
+  @override
+  Future<T> timeout(Duration timeLimit,
+          {FutureOr<T> Function()? onTimeout}) =>
+      Future<T>.value(_value);
+}
 
 void main() {
   late MockSupabaseClient mockClient;
@@ -93,14 +120,14 @@ void main() {
       mockQueryBuilder = MockSupabaseQueryBuilder();
       mockFilterBuilder = MockPostgrestFilterBuilder();
       when(() => mockClient.from('users')).thenReturn(mockQueryBuilder);
+      when(() => mockQueryBuilder.select()).thenReturn(mockFilterBuilder);
     });
 
     test('returns Success(null) when user not found', () async {
-      when(() => mockQueryBuilder.select()).thenReturn(mockQueryBuilder);
-      when(() => mockQueryBuilder.eq('id', 'user-123'))
+      when(() => mockFilterBuilder.eq('id', 'user-123'))
           .thenReturn(mockFilterBuilder);
       when(() => mockFilterBuilder.maybeSingle())
-          .thenAnswer((_) async => null);
+          .thenReturn(FakePostgrestResponse<PostgrestMap?>(null));
 
       final result = await repository.getProfile('user-123');
       expect(result.isSuccess, isTrue);
@@ -108,8 +135,7 @@ void main() {
     });
 
     test('returns Fail on PostgrestException', () async {
-      when(() => mockQueryBuilder.select()).thenReturn(mockQueryBuilder);
-      when(() => mockQueryBuilder.eq('id', 'user-123'))
+      when(() => mockFilterBuilder.eq('id', 'user-123'))
           .thenThrow(PostgrestException(message: 'DB error', code: '500'));
 
       final result = await repository.getProfile('user-123');

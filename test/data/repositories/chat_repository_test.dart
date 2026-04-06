@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -11,8 +13,33 @@ class MockSupabaseQueryBuilder extends Mock implements SupabaseQueryBuilder {}
 class MockPostgrestFilterBuilder extends Mock
     implements PostgrestFilterBuilder {}
 
-class MockPostgrestTransformBuilder extends Mock
-    implements PostgrestTransformBuilder<Map<String, dynamic>> {}
+/// A fake [PostgrestBuilder] that resolves to [_value] when awaited.
+class FakePostgrestResponse<T> extends Fake implements PostgrestBuilder<T> {
+  final T _value;
+  FakePostgrestResponse(this._value);
+
+  @override
+  Future<S> then<S>(FutureOr<S> Function(T value) onValue,
+          {Function? onError}) =>
+      Future<T>.value(_value).then(onValue, onError: onError);
+
+  @override
+  Future<T> catchError(Function onError,
+          {bool Function(Object error)? test}) =>
+      Future<T>.value(_value);
+
+  @override
+  Future<T> whenComplete(FutureOr<void> Function() action) =>
+      Future<T>.value(_value).whenComplete(action);
+
+  @override
+  Stream<T> asStream() => Stream.value(_value);
+
+  @override
+  Future<T> timeout(Duration timeLimit,
+          {FutureOr<T> Function()? onTimeout}) =>
+      Future<T>.value(_value);
+}
 
 void main() {
   late MockSupabaseClient mockClient;
@@ -94,12 +121,10 @@ void main() {
   group('sendRoomMessage', () {
     late MockSupabaseQueryBuilder mockQueryBuilder;
     late MockPostgrestFilterBuilder mockFilterBuilder;
-    late MockPostgrestTransformBuilder mockTransformBuilder;
 
     setUp(() {
       mockQueryBuilder = MockSupabaseQueryBuilder();
       mockFilterBuilder = MockPostgrestFilterBuilder();
-      mockTransformBuilder = MockPostgrestTransformBuilder();
       when(() => mockClient.from('chat_messages'))
           .thenReturn(mockQueryBuilder);
     });
@@ -120,9 +145,9 @@ void main() {
             'room_id': 'room-1',
           })).thenReturn(mockFilterBuilder);
       when(() => mockFilterBuilder.select())
-          .thenReturn(mockQueryBuilder);
-      when(() => mockQueryBuilder.single())
-          .thenAnswer((_) async => insertedData);
+          .thenReturn(mockFilterBuilder);
+      when(() => mockFilterBuilder.single())
+          .thenReturn(FakePostgrestResponse<PostgrestMap>(insertedData));
 
       final result = await repository.sendRoomMessage({
         'sender_id': 'user-1',
