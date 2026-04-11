@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -200,20 +201,27 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
               photos: _photos,
               onAdd: () async {
                 final picker = ImagePicker();
-                final images = await picker.pickMultiImage();
+                // Compress + downscale on pick. Prevents OOM during
+                // base64-encode for Gemini and keeps Supabase storage
+                // bills sane (item photos don't need full phone resolution).
+                final images = await picker.pickMultiImage(
+                  maxWidth: 1600,
+                  maxHeight: 1600,
+                  imageQuality: 82,
+                );
                 if (images.isEmpty) return;
                 final wasEmpty = _photos.isEmpty;
                 setState(() => _photos.addAll(images));
                 // Auto-tag from the first photo when photos are initially added
                 if (wasEmpty && _photos.isNotEmpty) {
-                  _autoTag(_photos.first);
+                  unawaited(_autoTag(_photos.first));
                 }
               },
               onRemove: (i) {
                 setState(() => _photos.removeAt(i));
                 // Re-tag if cover photo changed and photos remain
                 if (i == 0 && _photos.isNotEmpty) {
-                  _autoTag(_photos.first);
+                  unawaited(_autoTag(_photos.first));
                 }
                 if (_photos.isEmpty) {
                   setState(() => _vlmTag = null);

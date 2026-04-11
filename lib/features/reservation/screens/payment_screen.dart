@@ -48,12 +48,18 @@ class PaymentScreen extends StatelessWidget {
         appScheme: 'com.dolpin.app',
       ),
       callback: (Map<String, String> result) {
-        Navigator.pop(context, PaymentResult(
-          transactionId: result['imp_uid'] ?? '',
-          status: result['success'] == 'true' ? PaymentStatus.success : PaymentStatus.failed,
-          amount: params.amount,
-          currency: 'KRW',
-        ));
+        Navigator.pop(
+          context,
+          PaymentResult(
+            merchantUid: result['merchant_uid'] ?? params.merchantUid,
+            impUid: result['imp_uid'],
+            status: result['success'] == 'true'
+                ? PaymentStatus.success
+                : PaymentStatus.failed,
+            amount: params.amount,
+            currency: 'KRW',
+          ),
+        );
       },
     );
   }

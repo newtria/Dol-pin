@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -8,6 +9,16 @@ import '../../core/constants/env.dart';
 import '../../core/errors/failures.dart';
 import '../../core/errors/result.dart';
 import 'supabase_client.dart';
+
+/// Hard cap on image payload sent to the Gemini edge function.
+/// Gemini edge function body limit is ~6MB; raw JPEG from modern phones can
+/// exceed that once base64-encoded (1.33x expansion), so we gate at 4MB raw.
+const int _maxGeminiImageBytes = 4 * 1024 * 1024;
+
+/// Timeout for the single round trip to the Gemini edge function. VLM
+/// inference typically completes in 2–8s; anything beyond 30s indicates a
+/// stuck network path and should surface to the user.
+const Duration _geminiTimeout = Duration(seconds: 30);
 
 final geminiServiceProvider = Provider<GeminiService>((ref) {
   final client = ref.watch(supabaseProvider);
@@ -83,6 +94,13 @@ class GeminiService {
   }) async {
     try {
       final bytes = await imageFile.readAsBytes();
+      if (bytes.length > _maxGeminiImageBytes) {
+        return Fail(ValidationFailure(
+          'Image too large for analysis '
+          '(${(bytes.length / 1024 / 1024).toStringAsFixed(1)}MB, '
+          'max ${_maxGeminiImageBytes ~/ 1024 ~/ 1024}MB)',
+        ));
+      }
       final base64Image = base64Encode(bytes);
       final mimeType = _getMimeType(imageFile.path);
 
@@ -94,15 +112,17 @@ class GeminiService {
         headers['Authorization'] = 'Bearer $_accessToken';
       }
 
-      final response = await _httpClient.post(
-        Uri.parse(_functionUrl),
-        headers: headers,
-        body: jsonEncode({
-          'image': base64Image,
-          'mimeType': mimeType,
-          'prompt': prompt,
-        }),
-      );
+      final response = await _httpClient
+          .post(
+            Uri.parse(_functionUrl),
+            headers: headers,
+            body: jsonEncode({
+              'image': base64Image,
+              'mimeType': mimeType,
+              'prompt': prompt,
+            }),
+          )
+          .timeout(_geminiTimeout);
 
       if (response.statusCode != 200) {
         return Fail(ServerFailure(
@@ -118,6 +138,8 @@ class GeminiService {
       }
 
       return Success(resultText);
+    } on TimeoutException {
+      return const Fail(NetworkFailure('Gemini request timed out'));
     } catch (e) {
       return Fail(mapException(e));
     }
