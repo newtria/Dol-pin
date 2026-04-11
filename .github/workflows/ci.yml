@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# Flutter SDK pinned to match mise.toml / local dev. Bumping this should
+# happen together with `mise use asdf:mise-plugins/mise-flutter@<version>`
+# so local and CI stay aligned.
+env:
+  FLUTTER_VERSION: '3.41.4'
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -15,6 +21,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
@@ -24,9 +31,9 @@ jobs:
           path: |
             ~/.pub-cache
             .dart_tool
-          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
+          key: ${{ runner.os }}-pub-${{ env.FLUTTER_VERSION }}-${{ hashFiles('pubspec.lock') }}
           restore-keys: |
-            ${{ runner.os }}-pub-
+            ${{ runner.os }}-pub-${{ env.FLUTTER_VERSION }}-
 
       - name: Install dependencies
         run: flutter pub get

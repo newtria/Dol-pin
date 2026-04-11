@@ -3,3 +3,25 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   errors:
     invalid_annotation_target: ignore
+    # Lints below are enabled but surface as `info` so they do not block
+    # CI while we incrementally address them. Promote to `warning` once
+    # the codebase is clean.
+    unawaited_futures: info
+    unnecessary_await_in_return: info
+    avoid_slow_async_io: info
+    prefer_final_locals: info
+    prefer_final_in_for_each: info
+
+linter:
+  rules:
+    # Async hygiene. Fire-and-forget Futures are a common bug source in
+    # Supabase-heavy code (`.from(...).update(...)` returns a Future that
+    # the caller must not drop).
+    unawaited_futures: true
+    unnecessary_await_in_return: true
+    avoid_slow_async_io: true
+
+    # Immutability / style. Catches subtle "final was intended" cases that
+    # `dart fix` can auto-apply later.
+    prefer_final_locals: true
+    prefer_final_in_for_each: true

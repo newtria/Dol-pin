@@ -55,6 +55,6 @@ abstract class PaginatedFamilyAsyncNotifier<T, A>
   /// Discard current data and re-fetch from the first page.
   Future<void> refresh() async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(() async => await buildInitial());
+    state = await AsyncValue.guard(buildInitial);
   }
 }

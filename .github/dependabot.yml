@@ -1,0 +1,53 @@
+version: 2
+updates:
+  # Dart / Flutter packages (pub)
+  - package-ecosystem: "pub"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "pub"
+    # Group patch / minor bumps so they land as a single PR per week
+    # instead of a flood that nobody triages. Major bumps still come in
+    # as individual PRs because they tend to be breaking.
+    groups:
+      pub-production-patches:
+        dependency-type: "production"
+        update-types:
+          - "patch"
+      pub-production-minors:
+        dependency-type: "production"
+        update-types:
+          - "minor"
+      pub-dev-dependencies:
+        dependency-type: "development"
+        update-types:
+          - "patch"
+          - "minor"
+      riverpod:
+        patterns:
+          - "flutter_riverpod"
+          - "riverpod*"
+      freezed:
+        patterns:
+          - "freezed*"
+      supabase:
+        patterns:
+          - "supabase*"
+
+  # GitHub Actions workflow files
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    groups:
+      gha-all:
+        patterns:
+          - "*"
