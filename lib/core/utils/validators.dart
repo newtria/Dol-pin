@@ -1,3 +1,5 @@
+import 'package:characters/characters.dart';
+
 /// Centralized input validators for the app.
 class Validators {
   Validators._();

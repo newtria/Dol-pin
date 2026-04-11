@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/errors/failures.dart';
 import '../../core/errors/result.dart';
 
 /// BT Lightstick verification result

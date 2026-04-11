@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/validators.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/rental_provider.dart';
 import '../../../shared/widgets/error_view.dart';
@@ -50,13 +51,16 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   }
 
   void _onSearch(String query) {
-    final trimmed = query.trim();
-    if (trimmed.isEmpty) {
+    // Strip control chars + cap length before the repository sees it. The
+    // repository performs an additional pass to remove PostgREST-significant
+    // characters (`%_,():*`); both layers exist as defense in depth.
+    final sanitized = Validators.sanitizeSearch(query);
+    if (sanitized.isEmpty) {
       setState(() => _searchQuery = null);
       return;
     }
     setState(() {
-      _searchQuery = trimmed;
+      _searchQuery = sanitized;
       _selectedCategory = null;
     });
   }

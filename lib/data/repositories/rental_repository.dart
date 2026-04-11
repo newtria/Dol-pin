@@ -98,17 +98,34 @@ class RentalRepository {
     }
   }
 
+  /// PostgREST `or()` parses commas / parens / colons / `*` as filter syntax,
+  /// and `%` / `_` are LIKE wildcards. Both surfaces are user-controlled in
+  /// search input, so we strip them before interpolating into the filter
+  /// expression. Empty queries (after sanitization) return an empty result
+  /// instead of matching every active item via `%%`.
+  static String _sanitizeSearchQuery(String raw) {
+    final stripped = raw.replaceAll(RegExp(r'[%_,():\*]'), '').trim();
+    // Defense in depth: cap length so a pathological input cannot inflate the
+    // PostgREST request line beyond reasonable bounds.
+    if (stripped.length > 100) return stripped.substring(0, 100);
+    return stripped;
+  }
+
   Future<Result<List<RentalItemModel>>> search(
     String query, {
     int limit = kDefaultPageLimit,
     int offset = 0,
   }) async {
+    final safeQuery = _sanitizeSearchQuery(query);
+    if (safeQuery.isEmpty) {
+      return const Success(<RentalItemModel>[]);
+    }
     try {
       final data = await _client
           .from(DbTables.rentalItems)
           .select()
           .eq('status', ItemStatus.active.name)
-          .or('title.ilike.%$query%,description.ilike.%$query%')
+          .or('title.ilike.%$safeQuery%,description.ilike.%$safeQuery%')
           .order('created_at', ascending: false)
           .range(safeOffset(offset), safeOffset(offset) + safeLimit(limit) - 1);
       return Success(data.map((e) => RentalItemModel.fromJson(e)).toList());
