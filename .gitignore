@@ -3,9 +3,15 @@
 build/
 *.iml
 .dart_tool/
+.flutter-plugins-dependencies
 .packages
 .pub/
 .env
 .env.*
 !.env.example
 *.g.dart.bak
+
+# Planning / design documents — kept locally, not in VCS.
+# Whitelist per-file if a docs PDF ever needs to ship.
+*.pdf
+dolda_기획서.md
