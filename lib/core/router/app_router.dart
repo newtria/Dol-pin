@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -17,10 +19,36 @@ import '../../features/profile/screens/my_rentals_screen.dart';
 import '../../features/register/screens/register_item_screen.dart';
 import '../../features/reservation/screens/reservation_screen.dart';
 
+/// Bridges a [Stream] into a [Listenable] so GoRouter re-evaluates its
+/// `redirect` callback every time Supabase emits a new [AuthState] event
+/// (sign-in / sign-out / token refresh / recovery).
+///
+/// Without this, the router only re-checks auth when the user manually
+/// navigates — a silent sign-out would leave a stale authed screen visible.
+class _GoRouterRefreshStream extends ChangeNotifier {
+  _GoRouterRefreshStream(Stream<dynamic> stream) {
+    notifyListeners();
+    _subscription = stream.asBroadcastStream().listen(
+          (_) => notifyListeners(),
+        );
+  }
+
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
+
 final appRouter = GoRouter(
   initialLocation: '/',
   // GoRouter redirect runs outside Riverpod scope, so direct Supabase
   // access is acceptable here — this is the only allowed exception.
+  refreshListenable: _GoRouterRefreshStream(
+    Supabase.instance.client.auth.onAuthStateChange,
+  ),
   redirect: (context, state) {
     final session = Supabase.instance.client.auth.currentSession;
     final isAuth = session != null;
