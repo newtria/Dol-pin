@@ -1220,6 +1220,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Check out this concert on dol-pin! {title}'**
   String shareConcert(Object title);
+
+  /// No description provided for @otpRateLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many requests. Please try again in {seconds} seconds.'**
+  String otpRateLimit(int seconds);
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

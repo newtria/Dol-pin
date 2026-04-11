@@ -218,5 +218,8 @@
   "checkOutThisItem": "dol-pinでこのアイテムをチェック！ {title} - {price}/日",
   "@checkOutThisItem": { "placeholders": { "title": {}, "price": {} } },
   "shareConcert": "dol-pinでこのコンサートをチェック！ {title}",
-  "@shareConcert": { "placeholders": { "title": {} } }
+  "@shareConcert": { "placeholders": { "title": {} } },
+
+  "otpRateLimit": "リクエストが多すぎます。{seconds}秒後にもう一度お試しください。",
+  "@otpRateLimit": { "placeholders": { "seconds": { "type": "int" } } }
 }

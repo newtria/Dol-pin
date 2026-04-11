@@ -218,5 +218,8 @@
   "checkOutThisItem": "Lihat item ini di dol-pin! {title} - {price}/hari",
   "@checkOutThisItem": { "placeholders": { "title": {}, "price": {} } },
   "shareConcert": "Lihat konser ini di dol-pin! {title}",
-  "@shareConcert": { "placeholders": { "title": {} } }
+  "@shareConcert": { "placeholders": { "title": {} } },
+
+  "otpRateLimit": "Terlalu banyak permintaan. Silakan coba lagi dalam {seconds} detik.",
+  "@otpRateLimit": { "placeholders": { "seconds": { "type": "int" } } }
 }

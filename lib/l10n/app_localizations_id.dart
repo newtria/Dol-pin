@@ -596,4 +596,9 @@ class AppLocalizationsId extends AppLocalizations {
   String shareConcert(Object title) {
     return 'Lihat konser ini di dol-pin! $title';
   }
+
+  @override
+  String otpRateLimit(int seconds) {
+    return 'Terlalu banyak permintaan. Silakan coba lagi dalam $seconds detik.';
+  }
 }

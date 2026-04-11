@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/errors/failures.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/dolpin_button.dart';
@@ -42,10 +43,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     final result = await ref.read(authRepositoryProvider).signInWithOtp(phone);
     if (!mounted) return;
+    final l = AppLocalizations.of(context)!;
 
     result.when(
-      success: (_) => context.pushNamed('otp', queryParameters: {'phone': phone}),
-      failure: (f) => setState(() => _error = f.message),
+      success: (_) =>
+          context.pushNamed('otp', queryParameters: {'phone': phone}),
+      failure: (f) => setState(() {
+        _error = f is OtpRateLimitFailure
+            ? l.otpRateLimit(f.cooldownSeconds)
+            : f.message;
+      }),
     );
     setState(() => _isLoading = false);
   }

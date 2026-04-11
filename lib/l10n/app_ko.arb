@@ -218,5 +218,8 @@
   "checkOutThisItem": "돌핀에서 이 아이템을 확인해보세요! {title} - {price}/일",
   "@checkOutThisItem": { "placeholders": { "title": {}, "price": {} } },
   "shareConcert": "돌핀에서 이 콘서트를 확인해보세요! {title}",
-  "@shareConcert": { "placeholders": { "title": {} } }
+  "@shareConcert": { "placeholders": { "title": {} } },
+
+  "otpRateLimit": "요청이 너무 많습니다. {seconds}초 후 다시 시도해주세요.",
+  "@otpRateLimit": { "placeholders": { "seconds": { "type": "int" } } }
 }

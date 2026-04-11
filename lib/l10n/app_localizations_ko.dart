@@ -596,4 +596,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String shareConcert(Object title) {
     return '돌핀에서 이 콘서트를 확인해보세요! $title';
   }
+
+  @override
+  String otpRateLimit(int seconds) {
+    return '요청이 너무 많습니다. $seconds초 후 다시 시도해주세요.';
+  }
 }

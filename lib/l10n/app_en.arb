@@ -218,5 +218,8 @@
   "checkOutThisItem": "Check out this item on dol-pin! {title} - {price}/day",
   "@checkOutThisItem": { "placeholders": { "title": {}, "price": {} } },
   "shareConcert": "Check out this concert on dol-pin! {title}",
-  "@shareConcert": { "placeholders": { "title": {} } }
+  "@shareConcert": { "placeholders": { "title": {} } },
+
+  "otpRateLimit": "Too many requests. Please try again in {seconds} seconds.",
+  "@otpRateLimit": { "placeholders": { "seconds": { "type": "int" } } }
 }

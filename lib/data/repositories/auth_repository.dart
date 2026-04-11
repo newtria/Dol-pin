@@ -25,7 +25,9 @@ class AuthRepository {
     final now = DateTime.now();
     if (_lastOtpRequest != null &&
         now.difference(_lastOtpRequest!) < _otpCooldown) {
-      return Fail(const ValidationFailure('잠시 후 다시 시도해주세요 (60초 제한)'));
+      return Fail(OtpRateLimitFailure(
+        cooldownSeconds: _otpCooldown.inSeconds,
+      ));
     }
     try {
       await _client.auth.signInWithOtp(phone: phone);

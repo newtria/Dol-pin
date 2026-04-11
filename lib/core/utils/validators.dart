@@ -1,6 +1,10 @@
 import 'package:characters/characters.dart';
 
 /// Centralized input validators for the app.
+///
+/// Messages are intentionally English so they render sensibly in the
+/// EN/JA/ID locales. The Korean locale will see English fallback until we
+/// migrate validators to consume [AppLocalizations] at the call site.
 class Validators {
   Validators._();
 
@@ -9,15 +13,19 @@ class Validators {
 
   /// Validates international phone number format (E.164).
   static String? phone(String? value) {
-    if (value == null || value.trim().isEmpty) return '전화번호를 입력하세요';
-    if (!_phoneRegex.hasMatch(value.trim())) return '올바른 전화번호 형식이 아닙니다';
+    if (value == null || value.trim().isEmpty) {
+      return 'Phone number is required';
+    }
+    if (!_phoneRegex.hasMatch(value.trim())) {
+      return 'Invalid phone number format';
+    }
     return null;
   }
 
   /// Validates that amount is positive and within a reasonable range.
   static String? amount(int? value, {int max = 10000000}) {
-    if (value == null || value <= 0) return '금액은 0보다 커야 합니다';
-    if (value > max) return '금액이 너무 큽니다 (최대 ${max.toString()})';
+    if (value == null || value <= 0) return 'Amount must be greater than 0';
+    if (value > max) return 'Amount is too large (max ${max.toString()})';
     return null;
   }
 
@@ -28,21 +36,25 @@ class Validators {
     int min = 1,
     int max = 500,
   }) {
-    if (value == null || value.trim().isEmpty) return '$fieldName을(를) 입력하세요';
+    if (value == null || value.trim().isEmpty) return '$fieldName is required';
     final trimmed = value.trim();
-    if (trimmed.length < min) return '$fieldName은(는) ${min}자 이상이어야 합니다';
-    if (trimmed.length > max) return '$fieldName은(는) ${max}자 이하여야 합니다';
+    if (trimmed.length < min) {
+      return '$fieldName must be at least $min characters';
+    }
+    if (trimmed.length > max) {
+      return '$fieldName must be at most $max characters';
+    }
     return null;
   }
 
   static String? nickname(String? value) =>
-      stringLength(value, fieldName: '닉네임', min: 2, max: 30);
+      stringLength(value, fieldName: 'Nickname', min: 2, max: 30);
 
   static String? title(String? value) =>
-      stringLength(value, fieldName: '제목', min: 2, max: 100);
+      stringLength(value, fieldName: 'Title', min: 2, max: 100);
 
   static String? description(String? value) =>
-      stringLength(value, fieldName: '설명', max: 1000);
+      stringLength(value, fieldName: 'Description', max: 1000);
 
   /// Sanitizes a search query: trims, removes control characters, limits length.
   static String sanitizeSearch(String query, {int maxLength = 200}) {
