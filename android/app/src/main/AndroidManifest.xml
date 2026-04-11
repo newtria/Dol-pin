@@ -1,6 +1,40 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Permissions required for production release.
+         A separate debug manifest declares INTERNET for dev tooling; the main
+         manifest must list everything the app needs at runtime for release and
+         profile builds. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Notifications (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Camera + photo library (image_picker) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- Location (geolocator) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Bluetooth (BLE lightstick verification — Phase 2 feature, permissions
+         declared now so runtime flow does not need a manifest change later). -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
     <application
-        android:label="dolda"
+        android:label="dol-pin"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -23,6 +57,16 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+
+            <!-- Custom-scheme deep link: dolpin://item/:id, dolpin://chat/:roomId, etc.
+                 Universal-link (https://) support is intentionally deferred until an
+                 actual domain with /.well-known/assetlinks.json is available. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="dolpin" android:host="app"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

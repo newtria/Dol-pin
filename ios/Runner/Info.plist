@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Dolda</string>
+	<string>dol-pin</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>dolda</string>
+	<string>dol-pin</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -26,6 +26,38 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Localized usage strings should be moved into InfoPlist.strings per
+	     locale (ko/en/ja/id) before App Store submission. The English
+	     fallbacks below exist so local builds do not crash when accessing
+	     the corresponding APIs, and so automated App Store pre-checks pass. -->
+	<key>NSCameraUsageDescription</key>
+	<string>dol-pin uses the camera to photograph rental items when listing them and when confirming returns.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>dol-pin needs access to your photo library to upload photos of rental items and return confirmations.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>dol-pin saves shared rental photos to your photo library when you tap save.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>dol-pin uses your location to show nearby rental items for the concerts you are attending.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>dol-pin scans for official K-pop lightsticks via Bluetooth to verify authenticity when you list an item.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>dol-pin communicates with official K-pop lightsticks via Bluetooth to verify authenticity when you list an item.</string>
+	<!-- Custom-scheme deep link (dolpin://item/:id, dolpin://chat/:roomId, etc.).
+	     Universal Links (associated domains) should be added once an owned
+	     domain is configured to serve apple-app-site-association. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>app.dolpin</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>dolpin</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
