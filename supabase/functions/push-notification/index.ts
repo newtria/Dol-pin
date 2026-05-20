@@ -119,33 +119,31 @@ async function getAccessToken(): Promise<string> {
 // Request handler
 // ---------------------------------------------------------------------------
 
+// Service-role client at module scope — Edge Function workers stay warm
+// across requests, so we avoid reconstructing the client per call.
+const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return preflightResponse(req)
-  }
+  if (req.method === 'OPTIONS') return preflightResponse(req)
   if (req.method !== 'POST') {
     return jsonResponse(req, 405, { error: 'Method not allowed' })
   }
+  const json = (status: number, body: unknown) => jsonResponse(req, status, body)
 
   const auth = await requireUser(req)
-  if (!auth.ok) {
-    return jsonResponse(req, auth.status, { error: auth.error })
-  }
+  if (!auth.ok) return json(auth.status, { error: auth.error })
   const callerId = auth.userId
 
   let payload: PushPayload
   try {
     payload = (await req.json()) as PushPayload
   } catch {
-    return jsonResponse(req, 400, { error: 'Invalid JSON body' })
+    return json(400, { error: 'Invalid JSON body' })
   }
 
   if (!payload.reservationId || !payload.receiverId || !payload.title || !payload.body) {
-    return jsonResponse(req, 400, { error: 'Missing required fields' })
+    return json(400, { error: 'Missing required fields' })
   }
-
-  // Service-role client for trusted DB reads (token verification + FCM lookup).
-  const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
   // Authorize: caller must be a participant of the reservation, and the
   // declared receiver must be the *other* participant of the same reservation.
@@ -156,19 +154,19 @@ Deno.serve(async (req) => {
     .single()
 
   if (resError || !reservation) {
-    return jsonResponse(req, 404, { error: 'Reservation not found' })
+    return json(404, { error: 'Reservation not found' })
   }
 
   const isCallerParticipant =
     reservation.lender_id === callerId || reservation.borrower_id === callerId
   if (!isCallerParticipant) {
-    return jsonResponse(req, 403, { error: 'Not a participant of this reservation' })
+    return json(403, { error: 'Not a participant of this reservation' })
   }
 
   const expectedReceiver =
     reservation.lender_id === callerId ? reservation.borrower_id : reservation.lender_id
   if (expectedReceiver !== payload.receiverId) {
-    return jsonResponse(req, 403, { error: 'receiverId does not match the reservation counter-party' })
+    return json(403, { error: 'receiverId does not match the reservation counter-party' })
   }
 
   const { data: receiverRow } = await adminClient
@@ -178,10 +176,9 @@ Deno.serve(async (req) => {
     .single()
 
   if (!receiverRow?.fcm_token) {
-    return jsonResponse(req, 404, { error: 'Receiver has no FCM token registered' })
+    return json(404, { error: 'Receiver has no FCM token registered' })
   }
 
-  // FCM HTTP v1
   const accessToken = await getAccessToken()
   const fcmRes = await fetch(
     `https://fcm.googleapis.com/v1/projects/${FCM_PROJECT_ID}/messages:send`,
@@ -204,9 +201,9 @@ Deno.serve(async (req) => {
   if (!fcmRes.ok) {
     const text = await fcmRes.text()
     console.error('FCM send failed', fcmRes.status, text)
-    return jsonResponse(req, 502, { error: 'FCM send failed', status: fcmRes.status })
+    return json(502, { error: 'FCM send failed', status: fcmRes.status })
   }
 
   const result = await fcmRes.json()
-  return jsonResponse(req, 200, result)
+  return json(200, result)
 })

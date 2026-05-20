@@ -1,5 +1,4 @@
 {
-  "_comment": "Pinned imports for all Edge Functions. Bumps land via PR — Dependabot does not support Deno yet, so this file is the manual choke point. Use `deno cache --reload` after a bump to refresh deno.lock.",
   "lock": "./deno.lock",
   "imports": {
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.49.4",

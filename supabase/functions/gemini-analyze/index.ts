@@ -29,6 +29,9 @@ import {
   preflightResponse,
 } from '../_shared/cors.ts'
 
+// Keyed under this name in `function_usage_quota`. Renaming the function
+// without renaming this string silently forks the per-user counter.
+const FUNCTION_NAME = 'gemini-analyze'
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!
 const DAILY_QUOTA = Number(Deno.env.get('GEMINI_DAILY_QUOTA') ?? '50')
 
@@ -45,31 +48,46 @@ interface AnalyzeRequest {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return preflightResponse(req)
-  }
+  if (req.method === 'OPTIONS') return preflightResponse(req)
   if (req.method !== 'POST') {
     return jsonResponse(req, 405, { error: 'Method not allowed' })
   }
+  const json = (status: number, body: unknown) => jsonResponse(req, status, body)
 
-  // -----------------------------------------------------------------
-  // 1. Authenticate. Anonymous calls (the previous behaviour) would
-  //    spend our Gemini budget for any visitor that learns the URL.
-  // -----------------------------------------------------------------
   const auth = await requireUser(req)
-  if (!auth.ok) {
-    return jsonResponse(req, auth.status, { error: auth.error })
+  if (!auth.ok) return json(auth.status, { error: auth.error })
+
+  // Validate body BEFORE touching the quota counter — malformed or oversized
+  // requests must not burn a quota slot.
+  let body: AnalyzeRequest
+  try {
+    body = (await req.json()) as AnalyzeRequest
+  } catch {
+    return json(400, { error: 'Invalid JSON body' })
   }
 
-  // -----------------------------------------------------------------
-  // 2. Per-user daily quota. Rejects with 429 before paying Gemini.
-  // -----------------------------------------------------------------
+  const { image, mimeType, prompt } = body
+  if (typeof image !== 'string' || image.length === 0) {
+    return json(400, { error: 'Missing or invalid image' })
+  }
+  if (image.length > MAX_IMAGE_BASE64_BYTES) {
+    return json(413, { error: 'Image too large' })
+  }
+  if (typeof prompt !== 'string' || prompt.length === 0) {
+    return json(400, { error: 'Missing or invalid prompt' })
+  }
+  if (prompt.length > MAX_PROMPT_CHARS) {
+    return json(413, { error: 'Prompt too long' })
+  }
+
   const quota = await checkAndIncrementQuota(
     auth.userId,
-    'gemini-analyze',
+    FUNCTION_NAME,
     DAILY_QUOTA,
   )
   if (!quota.ok) {
+    // 429 needs an extra `Retry-After` header that `jsonResponse` doesn't
+    // emit; build the response by hand for this branch only.
     const headers = {
       ...corsHeaders(req),
       'Content-Type': 'application/json',
@@ -83,33 +101,6 @@ Deno.serve(async (req) => {
     })
   }
 
-  // -----------------------------------------------------------------
-  // 3. Validate body.
-  // -----------------------------------------------------------------
-  let body: AnalyzeRequest
-  try {
-    body = (await req.json()) as AnalyzeRequest
-  } catch {
-    return jsonResponse(req, 400, { error: 'Invalid JSON body' })
-  }
-
-  const { image, mimeType, prompt } = body
-  if (typeof image !== 'string' || image.length === 0) {
-    return jsonResponse(req, 400, { error: 'Missing or invalid image' })
-  }
-  if (image.length > MAX_IMAGE_BASE64_BYTES) {
-    return jsonResponse(req, 413, { error: 'Image too large' })
-  }
-  if (typeof prompt !== 'string' || prompt.length === 0) {
-    return jsonResponse(req, 400, { error: 'Missing or invalid prompt' })
-  }
-  if (prompt.length > MAX_PROMPT_CHARS) {
-    return jsonResponse(req, 413, { error: 'Prompt too long' })
-  }
-
-  // -----------------------------------------------------------------
-  // 4. Call Gemini.
-  // -----------------------------------------------------------------
   const geminiUrl =
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`
 
@@ -141,7 +132,7 @@ Deno.serve(async (req) => {
         { status: geminiResponse.status, userId: auth.userId },
         errorBody,
       )
-      return jsonResponse(req, 502, {
+      return json(502, {
         error: 'Gemini API request failed',
         status: geminiResponse.status,
       })
@@ -151,12 +142,12 @@ Deno.serve(async (req) => {
     const text =
       geminiData?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
 
-    return jsonResponse(req, 200, {
+    return json(200, {
       result: text,
       quota: { count: quota.count, limit: quota.limit },
     })
   } catch (error) {
     console.error('Edge function error', { userId: auth.userId }, error)
-    return jsonResponse(req, 500, { error: 'Internal server error' })
+    return json(500, { error: 'Internal server error' })
   }
 })

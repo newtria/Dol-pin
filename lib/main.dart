@@ -14,14 +14,16 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await CrashReporter.guard(() async {
-    // Wire Sentry up before Supabase so any init-time failures are
-    // captured. No-op in debug or when SENTRY_DSN is empty.
-    await CrashReporter.init(Env.sentryDsn);
-
-    await Supabase.initialize(
-      url: Env.supabaseUrl,
-      anonKey: Env.supabaseAnonKey,
-    );
+    // Sentry's error hooks install synchronously inside SentryFlutter.init
+    // before the returned future completes, so running it concurrently with
+    // Supabase.initialize is safe and shaves one round-trip off cold start.
+    await Future.wait([
+      CrashReporter.init(Env.sentryDsn),
+      Supabase.initialize(
+        url: Env.supabaseUrl,
+        anonKey: Env.supabaseAnonKey,
+      ),
+    ]);
 
     // Flutter framework errors (widget lifecycle, rendering, etc.)
     FlutterError.onError = (details) {

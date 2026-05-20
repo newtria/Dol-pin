@@ -100,8 +100,7 @@ class PortOneGateway implements PaymentGateway {
       'dolpin_${reservationId}_${DateTime.now().millisecondsSinceEpoch}';
 
   /// Build payment params for the PaymentScreen widget.
-  /// The actual payment happens in the IamportPayment WebView from
-  /// `package:portone_flutter/v1/iamport_payment.dart` (PortOne V1).
+  /// The actual payment happens in the IamportPayment WebView.
   PortOnePaymentParams buildParams({
     required String reservationId,
     required int amount,
@@ -137,9 +136,8 @@ class PortOneGateway implements PaymentGateway {
     required String currency,
     required String description,
   }) async {
-    // Payment is initiated via PaymentScreen widget (PortOne V1 IamportPayment).
-    // This method returns a pending result with the merchant UID. `impUid` is
-    // unknown until the PortOne WebView callback fires.
+    // The PortOne WebView fires its callback with `imp_uid` after the
+    // charge completes — until then we only know the merchant-side UID.
     return Success(PaymentResult(
       merchantUid: _generateMerchantUid(reservationId),
       impUid: null,

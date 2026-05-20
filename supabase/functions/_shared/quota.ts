@@ -11,6 +11,8 @@ import { createClient } from '@supabase/supabase-js'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
+const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
 export interface QuotaOk {
   ok: true
   count: number
@@ -40,8 +42,7 @@ export async function checkAndIncrementQuota(
   functionName: string,
   limit: number,
 ): Promise<QuotaResult> {
-  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-  const { data, error } = await admin.rpc('increment_function_usage', {
+  const { data, error } = await adminClient.rpc('increment_function_usage', {
     p_user_id: userId,
     p_function_name: functionName,
     p_limit: limit,

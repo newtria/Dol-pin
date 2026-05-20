@@ -10,6 +10,12 @@ import { createClient } from '@supabase/supabase-js'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
+// `auth.getUser(jwt)` takes the token as an argument and validates the
+// signature server-side, so one shared admin client suffices — the caller's
+// JWT does not need to be attached as a default header. Module-scope reuse
+// avoids reconstructing the client per request.
+const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
 export interface AuthSuccess {
   ok: true
   userId: string
@@ -37,13 +43,7 @@ export async function requireUser(req: Request): Promise<AuthResult> {
     return { ok: false, status: 401, error: 'Empty bearer token' }
   }
 
-  // We use the service-role client just to call `getUser(jwt)` — this
-  // resolves the JWT without RLS getting in the way. Subsequent queries
-  // that need RLS should use the *caller* client, not the service role.
-  const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${jwt}` } },
-  })
-  const { data, error } = await client.auth.getUser(jwt)
+  const { data, error } = await adminClient.auth.getUser(jwt)
   if (error || !data?.user) {
     return { ok: false, status: 401, error: 'Invalid token' }
   }
