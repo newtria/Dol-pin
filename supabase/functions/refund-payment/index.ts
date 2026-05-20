@@ -18,7 +18,9 @@
 //   5. We call PortOne `/payments/cancel` with the imp_secret.
 //   6. On success, we update the reservation row to reflect the refund.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from '@supabase/supabase-js'
+import { requireUser } from '../_shared/auth.ts'
+import { jsonResponse, preflightResponse } from '../_shared/cors.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -132,20 +134,6 @@ async function portOneCancel(
 // Request handler
 // ---------------------------------------------------------------------------
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
-
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
-}
-
 function extractReservationId(merchantUid: string): string | null {
   if (!merchantUid.startsWith('dolpin_')) return null
   const parts = merchantUid.split('_')
@@ -155,43 +143,28 @@ function extractReservationId(merchantUid: string): string | null {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return preflightResponse(req)
   }
   if (req.method !== 'POST') {
-    return jsonResponse(405, { error: 'Method not allowed' })
+    return jsonResponse(req, 405, { error: 'Method not allowed' })
   }
 
-  // JWT check.
-  const authHeader = req.headers.get('Authorization') ?? ''
-  if (!authHeader.toLowerCase().startsWith('bearer ')) {
-    return jsonResponse(401, { error: 'Missing bearer token' })
+  const auth = await requireUser(req)
+  if (!auth.ok) {
+    return jsonResponse(req, auth.status, { error: auth.error })
   }
-  const callerJwt = authHeader.slice('Bearer '.length).trim()
-  if (!callerJwt) {
-    return jsonResponse(401, { error: 'Empty bearer token' })
-  }
-
-  const callerClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${callerJwt}` } },
-  })
-  const { data: userData, error: userError } = await callerClient.auth.getUser(
-    callerJwt,
-  )
-  if (userError || !userData?.user) {
-    return jsonResponse(401, { error: 'Invalid token' })
-  }
-  const callerId = userData.user.id
+  const callerId = auth.userId
 
   // Parse body.
   let body: { imp_uid?: unknown; amount?: unknown; reason?: unknown }
   try {
     body = await req.json()
   } catch {
-    return jsonResponse(400, { error: 'Invalid JSON body' })
+    return jsonResponse(req, 400, { error: 'Invalid JSON body' })
   }
   const impUid = body.imp_uid
   if (typeof impUid !== 'string' || impUid.length === 0) {
-    return jsonResponse(400, { error: 'Missing imp_uid' })
+    return jsonResponse(req, 400, { error: 'Missing imp_uid' })
   }
   const refundAmount =
     typeof body.amount === 'number' && body.amount > 0
@@ -209,12 +182,12 @@ Deno.serve(async (req) => {
     payment = await fetchPortOnePayment(impUid, token)
   } catch (e) {
     console.error('PortOne lookup failed', e)
-    return jsonResponse(502, { error: 'PortOne lookup failed' })
+    return jsonResponse(req, 502, { error: 'PortOne lookup failed' })
   }
 
   const reservationId = extractReservationId(payment.merchant_uid)
   if (!reservationId) {
-    return jsonResponse(400, { error: 'Unknown merchant_uid format' })
+    return jsonResponse(req, 400, { error: 'Unknown merchant_uid format' })
   }
 
   // Load the reservation, verify caller participates.
@@ -226,12 +199,12 @@ Deno.serve(async (req) => {
     .maybeSingle()
 
   if (resError || !reservation) {
-    return jsonResponse(404, { error: 'Reservation not found' })
+    return jsonResponse(req, 404, { error: 'Reservation not found' })
   }
   const isParticipant =
     reservation.borrower_id === callerId || reservation.lender_id === callerId
   if (!isParticipant) {
-    return jsonResponse(403, {
+    return jsonResponse(req, 403, {
       error: 'Not a participant of this reservation',
     })
   }
@@ -239,7 +212,7 @@ Deno.serve(async (req) => {
   // Don't try to cancel something that isn't actually paid yet, or that
   // PortOne already marked as cancelled.
   if (payment.status !== 'paid') {
-    return jsonResponse(409, {
+    return jsonResponse(req, 409, {
       error: `Cannot refund a payment with status '${payment.status}'`,
     })
   }
@@ -255,7 +228,7 @@ Deno.serve(async (req) => {
     })
   } catch (e) {
     console.error('PortOne cancel failed', e)
-    return jsonResponse(502, { error: 'PortOne cancel failed' })
+    return jsonResponse(req, 502, { error: 'PortOne cancel failed' })
   }
 
   // Reflect the refund in our own reservation state. If a partial refund,
@@ -275,7 +248,7 @@ Deno.serve(async (req) => {
     // PortOne already cancelled — don't signal total failure.
   }
 
-  return jsonResponse(200, {
+  return jsonResponse(req, 200, {
     imp_uid: impUid,
     merchant_uid: payment.merchant_uid,
     cancel_amount: cancelled.cancel_amount ?? refundAmount ?? payment.amount,

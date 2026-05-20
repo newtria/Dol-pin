@@ -1,0 +1,53 @@
+name: CodeQL
+
+# Scans the TypeScript code in supabase/functions/. Dart support in CodeQL
+# is still community-maintained, so the Flutter app is not analysed here —
+# `flutter analyze` in ci.yml carries that load.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - '.github/workflows/codeql.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - '.github/workflows/codeql.yml'
+  schedule:
+    - cron: '17 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze TypeScript
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript-typescript']
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # Limit to Edge Functions — the rest of the repo is Dart/Swift/
+          # Kotlin/Gradle, which CodeQL would ignore but still walk.
+          source-root: supabase/functions
+          queries: security-and-quality
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:${{ matrix.language }}'

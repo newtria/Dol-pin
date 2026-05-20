@@ -1,0 +1,24 @@
+{
+  "_comment": "Pinned imports for all Edge Functions. Bumps land via PR — Dependabot does not support Deno yet, so this file is the manual choke point. Use `deno cache --reload` after a bump to refresh deno.lock.",
+  "lock": "./deno.lock",
+  "imports": {
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.49.4",
+    "djwt": "https://deno.land/x/djwt@v3.0.2/mod.ts"
+  },
+  "tasks": {
+    "fmt": "deno fmt",
+    "lint": "deno lint",
+    "check": "deno check --quiet ./**/*.ts"
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"],
+      "exclude": ["no-explicit-any"]
+    }
+  },
+  "fmt": {
+    "semiColons": false,
+    "singleQuote": true,
+    "lineWidth": 100
+  }
+}

@@ -11,8 +11,8 @@ updates:
       - "dependencies"
       - "pub"
     # Group patch / minor bumps so they land as a single PR per week
-    # instead of a flood that nobody triages. Major bumps still come in
-    # as individual PRs because they tend to be breaking.
+    # instead of a flood that nobody triages. Majors land in their own
+    # group so they're triaged together but kept separate from minors.
     groups:
       pub-production-patches:
         dependency-type: "production"
@@ -27,6 +27,9 @@ updates:
         update-types:
           - "patch"
           - "minor"
+      pub-majors:
+        update-types:
+          - "major"
       riverpod:
         patterns:
           - "flutter_riverpod"

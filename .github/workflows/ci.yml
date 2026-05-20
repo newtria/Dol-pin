@@ -6,20 +6,28 @@ on:
   pull_request:
     branches: [main]
 
-# Flutter SDK pinned to match mise.toml / local dev. Bumping this should
-# happen together with `mise use asdf:mise-plugins/mise-flutter@<version>`
-# so local and CI stay aligned.
+# Least-privilege default. Individual jobs may widen as needed.
+permissions:
+  contents: read
+
+# Flutter SDK pinned to a specific stable. Bumping this should happen
+# together with `mise.toml` so local and CI stay aligned.
 env:
-  FLUTTER_VERSION: '3.41.4'
+  FLUTTER_VERSION: '3.44.0'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: subosito/flutter-action@v2
+      # Third-party action pinned by SHA. Update the SHA together with
+      # the version tag comment when bumping.
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
@@ -34,6 +42,16 @@ jobs:
           key: ${{ runner.os }}-pub-${{ env.FLUTTER_VERSION }}-${{ hashFiles('pubspec.lock') }}
           restore-keys: |
             ${{ runner.os }}-pub-${{ env.FLUTTER_VERSION }}-
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
       - name: Install dependencies
         run: flutter pub get

@@ -12,4 +12,10 @@ abstract class Env {
 
   @EnviedField(varName: 'PORTONE_IMP_CODE', defaultValue: 'imp00000000')
   static const String portOneImpCode = _Env.portOneImpCode;
+
+  /// Sentry DSN. Empty string disables crash reporting (e.g. in debug builds
+  /// or when developers run without a Sentry project). The crash reporter
+  /// short-circuits init() if this is blank.
+  @EnviedField(varName: 'SENTRY_DSN', defaultValue: '')
+  static const String sentryDsn = _Env.sentryDsn;
 }

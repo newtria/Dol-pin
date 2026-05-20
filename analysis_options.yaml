@@ -3,12 +3,16 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   errors:
     invalid_annotation_target: ignore
-    # Lints below are enabled but surface as `info` so they do not block
-    # CI while we incrementally address them. Promote to `warning` once
-    # the codebase is clean.
-    unawaited_futures: info
-    unnecessary_await_in_return: info
-    avoid_slow_async_io: info
+    # Async-hygiene rules — promoted to `warning` once the incremental
+    # cleanup of session 1 landed. `flutter analyze` will now flag PR-time
+    # regressions instead of silently accepting them.
+    unawaited_futures: warning
+    unnecessary_await_in_return: warning
+    avoid_slow_async_io: warning
+    # Immutability lints stay at `info` for one more sweep — there is
+    # still a long tail of non-final locals in feature screens that
+    # `dart fix --apply` will resolve. Promote to `warning` once that
+    # cleanup PR lands.
     prefer_final_locals: info
     prefer_final_in_for_each: info
 

@@ -19,8 +19,10 @@
 //     their own reservations. This is the only legitimate use case in the
 //     app and matches the chat-room access pattern.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { create, getNumericDate } from 'https://deno.land/x/djwt@v3.0.2/mod.ts'
+import { createClient } from '@supabase/supabase-js'
+import { create, getNumericDate } from 'djwt'
+import { requireUser } from '../_shared/auth.ts'
+import { jsonResponse, preflightResponse } from '../_shared/cors.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -117,58 +119,29 @@ async function getAccessToken(): Promise<string> {
 // Request handler
 // ---------------------------------------------------------------------------
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
-
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return preflightResponse(req)
   }
   if (req.method !== 'POST') {
-    return jsonResponse(405, { error: 'Method not allowed' })
+    return jsonResponse(req, 405, { error: 'Method not allowed' })
   }
 
-  const authHeader = req.headers.get('Authorization') ?? ''
-  if (!authHeader.toLowerCase().startsWith('bearer ')) {
-    return jsonResponse(401, { error: 'Missing bearer token' })
+  const auth = await requireUser(req)
+  if (!auth.ok) {
+    return jsonResponse(req, auth.status, { error: auth.error })
   }
-  const callerJwt = authHeader.slice('Bearer '.length).trim()
-  if (!callerJwt) {
-    return jsonResponse(401, { error: 'Empty bearer token' })
-  }
-
-  // Resolve caller via the platform anon-key client *with* the user's JWT
-  // attached. Supabase will validate the token signature and surface the
-  // authenticated user via auth.getUser(); a forged token returns null here.
-  const callerClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${callerJwt}` } },
-  })
-
-  const { data: userData, error: userError } = await callerClient.auth.getUser(callerJwt)
-  if (userError || !userData?.user) {
-    return jsonResponse(401, { error: 'Invalid token' })
-  }
-  const callerId = userData.user.id
+  const callerId = auth.userId
 
   let payload: PushPayload
   try {
     payload = (await req.json()) as PushPayload
   } catch {
-    return jsonResponse(400, { error: 'Invalid JSON body' })
+    return jsonResponse(req, 400, { error: 'Invalid JSON body' })
   }
 
   if (!payload.reservationId || !payload.receiverId || !payload.title || !payload.body) {
-    return jsonResponse(400, { error: 'Missing required fields' })
+    return jsonResponse(req, 400, { error: 'Missing required fields' })
   }
 
   // Service-role client for trusted DB reads (token verification + FCM lookup).
@@ -183,19 +156,19 @@ Deno.serve(async (req) => {
     .single()
 
   if (resError || !reservation) {
-    return jsonResponse(404, { error: 'Reservation not found' })
+    return jsonResponse(req, 404, { error: 'Reservation not found' })
   }
 
   const isCallerParticipant =
     reservation.lender_id === callerId || reservation.borrower_id === callerId
   if (!isCallerParticipant) {
-    return jsonResponse(403, { error: 'Not a participant of this reservation' })
+    return jsonResponse(req, 403, { error: 'Not a participant of this reservation' })
   }
 
   const expectedReceiver =
     reservation.lender_id === callerId ? reservation.borrower_id : reservation.lender_id
   if (expectedReceiver !== payload.receiverId) {
-    return jsonResponse(403, { error: 'receiverId does not match the reservation counter-party' })
+    return jsonResponse(req, 403, { error: 'receiverId does not match the reservation counter-party' })
   }
 
   const { data: receiverRow } = await adminClient
@@ -205,7 +178,7 @@ Deno.serve(async (req) => {
     .single()
 
   if (!receiverRow?.fcm_token) {
-    return jsonResponse(404, { error: 'Receiver has no FCM token registered' })
+    return jsonResponse(req, 404, { error: 'Receiver has no FCM token registered' })
   }
 
   // FCM HTTP v1
@@ -231,9 +204,9 @@ Deno.serve(async (req) => {
   if (!fcmRes.ok) {
     const text = await fcmRes.text()
     console.error('FCM send failed', fcmRes.status, text)
-    return jsonResponse(502, { error: 'FCM send failed', status: fcmRes.status })
+    return jsonResponse(req, 502, { error: 'FCM send failed', status: fcmRes.status })
   }
 
   const result = await fcmRes.json()
-  return jsonResponse(200, result)
+  return jsonResponse(req, 200, result)
 })

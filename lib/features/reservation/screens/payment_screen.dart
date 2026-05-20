@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:iamport_flutter/iamport_payment.dart';
-import 'package:iamport_flutter/model/payment_data.dart';
+// Migrated from `iamport_flutter` (deprecated by PortOne) to `portone_flutter`.
+// The widget class name stays `IamportPayment` for V1 backwards compatibility;
+// only the package name changes. portone_flutter 0.12 keeps the flat
+// `lib/iamport_payment.dart` layout; the 1.0 line moves to
+// `lib/v1/iamport_payment.dart` and adds a V2 widget at
+// `lib/v2/portone_payment.dart`. We pin to 0.12 due to a `json_annotation`
+// conflict with `custom_lint` — see pubspec.yaml for the rationale.
+import 'package:portone_flutter/iamport_payment.dart';
+import 'package:portone_flutter/model/payment_data.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/env.dart';
 import '../../../data/datasources/payment_service.dart';

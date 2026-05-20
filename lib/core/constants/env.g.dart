@@ -15,4 +15,6 @@ final class _Env {
   static const String supabaseAnonKey = 'placeholder-anon-key';
 
   static const String portOneImpCode = 'imp00000000';
+
+  static const String sentryDsn = '';
 }
