@@ -33,7 +33,14 @@ import {
 // without renaming this string silently forks the per-user counter.
 const FUNCTION_NAME = 'gemini-analyze'
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!
-const DAILY_QUOTA = Number(Deno.env.get('GEMINI_DAILY_QUOTA') ?? '50')
+
+// Misconfigured env (`"abc"`, blank, "0") otherwise produces NaN / 0 and
+// either every request fails 500 or the limit collapses to 1.
+const DAILY_QUOTA_DEFAULT = 50
+const parsedQuota = Number(Deno.env.get('GEMINI_DAILY_QUOTA') ?? '')
+const DAILY_QUOTA = Number.isFinite(parsedQuota) && parsedQuota >= 1
+  ? Math.floor(parsedQuota)
+  : DAILY_QUOTA_DEFAULT
 
 // Soft cap before we even attempt to hit Gemini. The mobile client trims
 // images to <= 4 MB base64 before calling us; anything larger is a sign of
@@ -101,13 +108,19 @@ Deno.serve(async (req) => {
     })
   }
 
+  // Pass the API key in the header instead of the URL — `?key=…` ends up
+  // in Supabase Function fetch logs, exposing the production Gemini key to
+  // anyone with log-read access on the project.
   const geminiUrl =
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
 
   try {
     const geminiResponse = await fetch(geminiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': GEMINI_API_KEY,
+      },
       body: JSON.stringify({
         contents: [
           {

@@ -13,10 +13,7 @@
 // The reply mirrors the request Origin only when it appears in the
 // allowlist, preventing reflection of arbitrary origins.
 
-const RAW = Deno.env.get('ALLOWED_ORIGINS') ?? ''
-const ALLOWED = new Set(
-  RAW.split(',').map((s) => s.trim()).filter((s) => s.length > 0),
-)
+const ALLOWED = parseAllowlist(Deno.env.get('ALLOWED_ORIGINS'))
 
 const BASE_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Headers':
@@ -25,20 +22,33 @@ const BASE_HEADERS: Record<string, string> = {
   'Vary': 'Origin',
 }
 
+/// Pure — exported for unit tests. Empty / whitespace-only env → empty
+/// set, which signals "no allowlist configured" and triggers the
+/// wildcard fallback in [resolveOrigin].
+export function parseAllowlist(raw: string | undefined): Set<string> {
+  return new Set(
+    (raw ?? '').split(',').map((s) => s.trim()).filter((s) => s.length > 0),
+  )
+}
+
+/// Pure — exported for unit tests. Returns the value the response should
+/// put in `Access-Control-Allow-Origin`, or `null` to omit the header.
+export function resolveOrigin(
+  origin: string,
+  allowed: Set<string>,
+): string | null {
+  if (!origin) return null
+  if (allowed.size === 0) return '*'
+  if (allowed.has(origin)) return origin
+  return null
+}
+
 export function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('Origin') ?? ''
-  // No Origin (native mobile, server-to-server) — return base headers.
-  if (!origin) return { ...BASE_HEADERS }
-  // Wildcard fallback when no allowlist configured.
-  if (ALLOWED.size === 0) {
-    return { ...BASE_HEADERS, 'Access-Control-Allow-Origin': '*' }
-  }
-  // Reflect only allowlisted origins.
-  if (ALLOWED.has(origin)) {
-    return { ...BASE_HEADERS, 'Access-Control-Allow-Origin': origin }
-  }
-  // Disallowed origin — omit ACAO so the browser blocks the response.
-  return { ...BASE_HEADERS }
+  const acao = resolveOrigin(origin, ALLOWED)
+  return acao === null
+    ? { ...BASE_HEADERS }
+    : { ...BASE_HEADERS, 'Access-Control-Allow-Origin': acao }
 }
 
 export function jsonResponse(

@@ -32,9 +32,14 @@ CREATE INDEX IF NOT EXISTS function_usage_quota_day_idx
 
 ALTER TABLE function_usage_quota ENABLE ROW LEVEL SECURITY;
 
--- Authenticated users may read only their own counters (no other rows
--- ever leak). Writes are blocked from authenticated and anonymous
--- clients entirely — only the RPC may mutate.
+-- Authenticated users may read only their own counters via the policy
+-- below. Writes are blocked entirely from `authenticated` and `anon` —
+-- only the SECURITY DEFINER RPC (granted to `service_role` further down)
+-- may mutate. Without the explicit table grant the policy would be
+-- unreachable; the grant + policy together enable per-user introspection
+-- (useful for a future "you have N requests left today" UI).
+GRANT SELECT ON function_usage_quota TO authenticated;
+
 DROP POLICY IF EXISTS function_usage_quota_self_read ON function_usage_quota;
 CREATE POLICY function_usage_quota_self_read
   ON function_usage_quota

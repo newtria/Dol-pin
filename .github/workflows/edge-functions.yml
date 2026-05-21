@@ -1,0 +1,40 @@
+name: Edge Functions
+
+# Runs Deno type-check + tests on supabase/functions/. CodeQL covers
+# security queries; this job covers correctness.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - '.github/workflows/edge-functions.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - '.github/workflows/edge-functions.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deno:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type-check
+        working-directory: supabase/functions
+        run: deno check --config deno.json **/*.ts
+
+      - name: Test
+        working-directory: supabase/functions
+        run: deno test --config deno.json --allow-env _shared/

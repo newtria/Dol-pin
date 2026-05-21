@@ -51,11 +51,14 @@ async function getAccessToken(): Promise<string> {
     if (data.code !== 0) {
       throw new Error(`PortOne token: ${data.message ?? 'unknown'}`)
     }
-    const token = data.response.access_token as string
+    const accessToken = data?.response?.access_token
+    const expiredAt = Number(data?.response?.expired_at)
+    if (typeof accessToken !== 'string' || !Number.isFinite(expiredAt)) {
+      throw new Error('PortOne token: malformed response')
+    }
     // PortOne returns `expired_at` as unix seconds.
-    const expiresAt = Number(data.response.expired_at) * 1000
-    cachedToken = { value: token, expiresAt }
-    return token
+    cachedToken = { value: accessToken, expiresAt: expiredAt * 1000 }
+    return accessToken
   } finally {
     clearTimeout(timer)
   }
@@ -79,7 +82,7 @@ export async function getPayment(impUid: string): Promise<PortOnePayment> {
     if (data.code !== 0) {
       throw new Error(`PortOne payment: ${data.message ?? 'unknown'}`)
     }
-    return data.response as PortOnePayment
+    return assertPayment(data.response)
   } finally {
     clearTimeout(timer)
   }
@@ -105,10 +108,28 @@ export async function cancelPayment(params: {
     if (data.code !== 0) {
       throw new Error(`PortOne cancel: ${data.message ?? 'unknown'}`)
     }
-    return data.response as PortOnePayment
+    return assertPayment(data.response)
   } finally {
     clearTimeout(timer)
   }
+}
+
+// Narrow `unknown` to `PortOnePayment`. PortOne's success envelope
+// (`code: 0`) does not guarantee `response` is populated — defend against
+// the shape that would otherwise crash callers with a TypeError on
+// `payment.merchant_uid.startsWith(...)` and surface as an opaque 500.
+function assertPayment(response: unknown): PortOnePayment {
+  if (
+    response &&
+    typeof response === 'object' &&
+    typeof (response as { merchant_uid?: unknown }).merchant_uid === 'string' &&
+    typeof (response as { imp_uid?: unknown }).imp_uid === 'string' &&
+    typeof (response as { amount?: unknown }).amount === 'number' &&
+    typeof (response as { status?: unknown }).status === 'string'
+  ) {
+    return response as PortOnePayment
+  }
+  throw new Error('PortOne payment: malformed response')
 }
 
 /// Parses our `dolpin_<uuid>_<epoch>` merchant_uid format
