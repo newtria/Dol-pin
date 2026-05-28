@@ -6,6 +6,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../data/models/rental_item_model.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/errors/result.dart';
+import '../../../data/models/reservation_model.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/reservation_repository.dart';
@@ -118,7 +119,7 @@ class _ReservationBodyState extends ConsumerState<_ReservationBody> {
       ]);
 
       if (!mounted) return;
-      final reservationResult = results[0];
+      final reservationResult = results[0] as Result<ReservationModel>;
       final profileResult = results[1] as Result<UserModel?>;
 
       if (reservationResult.isFailure) {
@@ -138,7 +139,10 @@ class _ReservationBodyState extends ConsumerState<_ReservationBody> {
         final gateway = ref.read(paymentServiceProvider).gatewayForCurrency('KRW') as PortOneGateway;
         final userProfile = ref.read(currentUserProvider).valueOrNull;
         final params = gateway.buildParams(
-          reservationId: reservationResult.value.toString(),
+          // `value` is a ReservationModel (Freezed); .toString() inlines the
+          // whole model. The server-side `extractReservationId` parser
+          // requires the bare uuid in the merchant_uid `dolpin_<uuid>_<epoch>`.
+          reservationId: reservationResult.value.id,
           amount: _total,
           itemName: item.title,
           buyerName: userProfile?.nickname ?? 'User',

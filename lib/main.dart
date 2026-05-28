@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,42 +13,24 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await CrashReporter.guard(() async {
-    // Sentry's error hooks install synchronously inside SentryFlutter.init
-    // before the returned future completes, so running it concurrently with
-    // Supabase.initialize is safe and shaves one round-trip off cold start.
-    await Future.wait([
-      CrashReporter.init(Env.sentryDsn),
-      Supabase.initialize(
-        url: Env.supabaseUrl,
-        anonKey: Env.supabaseAnonKey,
-      ),
-    ]);
+    // Sentry init MUST complete before Supabase.initialize because Sentry's
+    // FlutterErrorIntegration / OnErrorIntegration register FlutterError.onError
+    // and PlatformDispatcher.instance.onError during init — anything that
+    // throws after they're installed is captured with full Sentry metadata
+    // (mechanism, library, defaultOnError chain). Do NOT reassign those
+    // handlers below — Sentry already owns them.
+    await CrashReporter.init(Env.sentryDsn);
+    await Supabase.initialize(
+      url: Env.supabaseUrl,
+      anonKey: Env.supabaseAnonKey,
+    );
 
-    // Flutter framework errors (widget lifecycle, rendering, etc.)
-    FlutterError.onError = (details) {
-      CrashReporter.report(
-        details.exception,
-        details.stack ?? StackTrace.current,
-        context: 'FlutterError',
-      );
-    };
-
-    // Async errors that escape widgets (e.g. unawaited Futures that throw).
-    // Flutter 3.3+ surfaces these via PlatformDispatcher.instance.onError
-    // rather than the zone; both handlers are needed for full coverage.
-    PlatformDispatcher.instance.onError = (error, stack) {
-      CrashReporter.report(error, stack, context: 'PlatformDispatcher');
-      return true;
-    };
-
-    // Replace the default red error screen with a friendly fallback on
-    // release. In debug, keep the red screen so we can see the exception.
+    // ErrorWidget.builder is the only framework hook Sentry does NOT
+    // install. Override it for a friendly release-build fallback; keep
+    // the red error screen in debug so the exception is visible.
     ErrorWidget.builder = (FlutterErrorDetails details) {
-      CrashReporter.report(
-        details.exception,
-        details.stack ?? StackTrace.current,
-        context: 'ErrorWidget',
-      );
+      // Sentry's FlutterErrorIntegration already captures `details`;
+      // do not double-send. Just render the fallback widget.
       if (!kReleaseMode) {
         return ErrorWidget.withDetails(
           message: details.exceptionAsString(),

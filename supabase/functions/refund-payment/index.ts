@@ -28,103 +28,147 @@ const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return preflightResponse(req)
-  if (req.method !== 'POST') {
-    return jsonResponse(req, 405, { error: 'Method not allowed' })
-  }
   const json = (status: number, body: unknown) => jsonResponse(req, status, body)
 
-  const auth = await requireUser(req)
-  if (!auth.ok) return json(auth.status, { error: auth.error })
-  const callerId = auth.userId
-
-  let body: { imp_uid?: unknown; amount?: unknown; reason?: unknown }
   try {
-    body = await req.json()
-  } catch {
-    return json(400, { error: 'Invalid JSON body' })
-  }
-  const impUid = body.imp_uid
-  if (typeof impUid !== 'string' || impUid.length === 0) {
-    return json(400, { error: 'Missing imp_uid' })
-  }
-  const refundAmount =
-    typeof body.amount === 'number' && body.amount > 0
-      ? Math.floor(body.amount)
-      : undefined
-  const reason =
-    typeof body.reason === 'string' && body.reason.length > 0
-      ? body.reason
-      : 'User requested refund'
+    if (req.method !== 'POST') {
+      return json(405, { error: 'Method not allowed' })
+    }
 
-  let payment: PortOnePayment
-  try {
-    payment = await getPayment(impUid)
-  } catch (e) {
-    console.error('PortOne lookup failed', e)
-    return json(502, { error: 'PortOne lookup failed' })
-  }
+    const auth = await requireUser(req)
+    if (!auth.ok) return json(auth.status, { error: auth.error })
+    const callerId = auth.userId
 
-  const reservationId = extractReservationId(payment.merchant_uid)
-  if (!reservationId) {
-    return json(400, { error: 'Unknown merchant_uid format' })
-  }
+    let rawBody: unknown
+    try {
+      rawBody = await req.json()
+    } catch {
+      return json(400, { error: 'Invalid JSON body' })
+    }
+    if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
+      return json(400, { error: 'Body must be a JSON object' })
+    }
+    const body = rawBody as { imp_uid?: unknown; amount?: unknown; reason?: unknown }
 
-  const { data: reservation, error: resError } = await adminClient
-    .from('reservations')
-    .select('id, borrower_id, lender_id, total_paid, status')
-    .eq('id', reservationId)
-    .maybeSingle()
+    const impUid = body.imp_uid
+    if (typeof impUid !== 'string' || impUid.length === 0) {
+      return json(400, { error: 'Missing imp_uid' })
+    }
+    const refundAmount =
+      typeof body.amount === 'number' && body.amount > 0
+        ? Math.floor(body.amount)
+        : undefined
+    const reason =
+      typeof body.reason === 'string' && body.reason.length > 0
+        ? body.reason
+        : 'User requested refund'
 
-  if (resError || !reservation) {
-    return json(404, { error: 'Reservation not found' })
-  }
-  const isParticipant =
-    reservation.borrower_id === callerId || reservation.lender_id === callerId
-  if (!isParticipant) {
-    return json(403, { error: 'Not a participant of this reservation' })
-  }
+    let payment: PortOnePayment
+    try {
+      payment = await getPayment(impUid)
+    } catch (e) {
+      console.error('PortOne lookup failed', e)
+      return json(502, { error: 'PortOne lookup failed' })
+    }
 
-  // Refusing anything that isn't currently `paid` keeps the operation
-  // idempotent against double-clicks and surfaces PortOne-side state drift
-  // (already-cancelled, never-confirmed) as a 409 rather than a silent retry.
-  if (payment.status !== 'paid') {
-    return json(409, {
-      error: `Cannot refund a payment with status '${payment.status}'`,
-    })
-  }
+    const reservationId = extractReservationId(payment.merchant_uid)
+    if (!reservationId) {
+      return json(400, { error: 'Unknown merchant_uid format' })
+    }
 
-  let cancelled: PortOnePayment
-  try {
-    cancelled = await cancelPayment({
+    const { data: reservation, error: resError } = await adminClient
+      .from('reservations')
+      .select('id, borrower_id, lender_id, total_paid, status')
+      .eq('id', reservationId)
+      .maybeSingle()
+
+    if (resError || !reservation) {
+      return json(404, { error: 'Reservation not found' })
+    }
+    const isParticipant =
+      reservation.borrower_id === callerId ||
+      reservation.lender_id === callerId
+    if (!isParticipant) {
+      return json(403, { error: 'Not a participant of this reservation' })
+    }
+
+    // PortOne sets payment.status='cancelled' after the FIRST cancel (even
+    // partial), so a second partial refund must also be allowed against a
+    // cancelled-but-not-fully-refunded payment. We compute the already-
+    // refunded amount from payment.cancel_amount and require that the new
+    // refund still fits inside the remaining balance.
+    const alreadyRefunded = payment.cancel_amount ?? 0
+    const remaining = payment.amount - alreadyRefunded
+    if (remaining <= 0) {
+      return json(409, { error: 'Payment is already fully refunded' })
+    }
+    if (payment.status !== 'paid' && payment.status !== 'cancelled') {
+      return json(409, {
+        error: `Cannot refund a payment with status '${payment.status}'`,
+      })
+    }
+    if (refundAmount !== undefined && refundAmount > remaining) {
+      return json(409, {
+        error: `Refund amount ${refundAmount} exceeds remaining ${remaining}`,
+      })
+    }
+
+    let cancelled: PortOnePayment
+    try {
+      cancelled = await cancelPayment({
+        imp_uid: impUid,
+        amount: refundAmount,
+        reason,
+      })
+    } catch (e) {
+      console.error('PortOne cancel failed', e)
+      return json(502, { error: 'PortOne cancel failed' })
+    }
+
+    // Determine the new state from cumulative refunded amount, NOT just
+    // this call's refundAmount — otherwise the final partial refund that
+    // drains the balance gets mis-marked `refund_partial` forever.
+    const totalRefunded = cancelled.cancel_amount ??
+      alreadyRefunded + (refundAmount ?? remaining)
+    const isFullyRefunded = totalRefunded >= reservation.total_paid
+    const nextStatus = isFullyRefunded ? 'refunded' : 'refund_partial'
+
+    const { error: updateError } = await adminClient
+      .from('reservations')
+      .update({ status: nextStatus })
+      .eq('id', reservationId)
+    if (updateError) {
+      // PortOne already refunded the user's money. Returning 200 here
+      // would tell the client the operation succeeded while the DB row
+      // still reads `paid`/`confirmed` — escrow settlement would then
+      // pay out a refunded reservation. Surface the divergence as 500
+      // so Ops gets paged and the caller can manually reconcile.
+      console.error(
+        'reservation update FAILED after PortOne cancel succeeded — STATE DIVERGENCE',
+        {
+          reservationId,
+          imp_uid: impUid,
+          cancelled_amount: cancelled.cancel_amount,
+          intended_status: nextStatus,
+          error: updateError,
+        },
+      )
+      return json(500, {
+        error:
+          'Refund processed at PortOne but reservation state update failed. Contact support with imp_uid.',
+        imp_uid: impUid,
+      })
+    }
+
+    return json(200, {
       imp_uid: impUid,
-      amount: refundAmount,
-      reason,
+      merchant_uid: payment.merchant_uid,
+      cancel_amount: cancelled.cancel_amount ?? refundAmount ?? payment.amount,
+      status: cancelled.status,
+      reservation_status: nextStatus,
     })
-  } catch (e) {
-    console.error('PortOne cancel failed', e)
-    return json(502, { error: 'PortOne cancel failed' })
+  } catch (error) {
+    console.error('refund-payment handler error', error)
+    return json(500, { error: 'Internal server error' })
   }
-
-  // Reservation status column is free-form text until the escrow state
-  // machine lands (see TODO.md). `refunded` / `refund_partial` are the
-  // values the Flutter side already reads.
-  const isFullRefund =
-    refundAmount === undefined || refundAmount >= reservation.total_paid
-  const nextStatus = isFullRefund ? 'refunded' : 'refund_partial'
-
-  const { error: updateError } = await adminClient
-    .from('reservations')
-    .update({ status: nextStatus })
-    .eq('id', reservationId)
-  if (updateError) {
-    // PortOne already cancelled — don't signal total failure.
-    console.error('reservation update failed', updateError)
-  }
-
-  return json(200, {
-    imp_uid: impUid,
-    merchant_uid: payment.merchant_uid,
-    cancel_amount: cancelled.cancel_amount ?? refundAmount ?? payment.amount,
-    status: cancelled.status,
-  })
 })

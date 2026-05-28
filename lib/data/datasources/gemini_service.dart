@@ -25,7 +25,12 @@ final geminiServiceProvider = Provider<GeminiService>((ref) {
   return GeminiService(
     supabaseUrl: Env.supabaseUrl,
     supabaseAnonKey: Env.supabaseAnonKey,
-    accessToken: client.auth.currentSession?.accessToken,
+    // Read the access token PER REQUEST. Capturing currentSession.accessToken
+    // once at provider construction freezes the token — it goes stale on
+    // session refresh (~1h) and is null entirely if the provider builds
+    // before sign-in. The server-side JWT check in gemini-analyze then
+    // 401s every subsequent call.
+    accessTokenProvider: () => client.auth.currentSession?.accessToken,
   );
 });
 
@@ -33,16 +38,16 @@ class GeminiService {
   GeminiService({
     required String supabaseUrl,
     required String supabaseAnonKey,
-    String? accessToken,
+    required String? Function() accessTokenProvider,
     http.Client? httpClient,
   })  : _functionUrl = '$supabaseUrl/functions/v1/gemini-analyze',
         _supabaseAnonKey = supabaseAnonKey,
-        _accessToken = accessToken,
+        _accessTokenProvider = accessTokenProvider,
         _httpClient = httpClient ?? http.Client();
 
   final String _functionUrl;
   final String _supabaseAnonKey;
-  final String? _accessToken;
+  final String? Function() _accessTokenProvider;
   final http.Client _httpClient;
 
   /// Analyzes a rental item photo and returns auto-generated tags.
@@ -108,8 +113,9 @@ class GeminiService {
         'Content-Type': 'application/json',
         'apikey': _supabaseAnonKey,
       };
-      if (_accessToken != null) {
-        headers['Authorization'] = 'Bearer $_accessToken';
+      final accessToken = _accessTokenProvider();
+      if (accessToken != null) {
+        headers['Authorization'] = 'Bearer $accessToken';
       }
 
       final response = await _httpClient

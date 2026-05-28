@@ -125,85 +125,95 @@ const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return preflightResponse(req)
-  if (req.method !== 'POST') {
-    return jsonResponse(req, 405, { error: 'Method not allowed' })
-  }
   const json = (status: number, body: unknown) => jsonResponse(req, status, body)
 
-  const auth = await requireUser(req)
-  if (!auth.ok) return json(auth.status, { error: auth.error })
-  const callerId = auth.userId
-
-  let payload: PushPayload
   try {
-    payload = (await req.json()) as PushPayload
-  } catch {
-    return json(400, { error: 'Invalid JSON body' })
-  }
+    if (req.method !== 'POST') {
+      return json(405, { error: 'Method not allowed' })
+    }
 
-  if (!payload.reservationId || !payload.receiverId || !payload.title || !payload.body) {
-    return json(400, { error: 'Missing required fields' })
-  }
+    const auth = await requireUser(req)
+    if (!auth.ok) return json(auth.status, { error: auth.error })
+    const callerId = auth.userId
 
-  // Authorize: caller must be a participant of the reservation, and the
-  // declared receiver must be the *other* participant of the same reservation.
-  const { data: reservation, error: resError } = await adminClient
-    .from('reservations')
-    .select('id, lender_id, borrower_id')
-    .eq('id', payload.reservationId)
-    .single()
+    let rawBody: unknown
+    try {
+      rawBody = await req.json()
+    } catch {
+      return json(400, { error: 'Invalid JSON body' })
+    }
+    if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
+      return json(400, { error: 'Body must be a JSON object' })
+    }
+    const payload = rawBody as PushPayload
 
-  if (resError || !reservation) {
-    return json(404, { error: 'Reservation not found' })
-  }
+    if (!payload.reservationId || !payload.receiverId || !payload.title || !payload.body) {
+      return json(400, { error: 'Missing required fields' })
+    }
 
-  const isCallerParticipant =
-    reservation.lender_id === callerId || reservation.borrower_id === callerId
-  if (!isCallerParticipant) {
-    return json(403, { error: 'Not a participant of this reservation' })
-  }
+    // Authorize: caller must be a participant of the reservation, and the
+    // declared receiver must be the *other* participant of the same reservation.
+    const { data: reservation, error: resError } = await adminClient
+      .from('reservations')
+      .select('id, lender_id, borrower_id')
+      .eq('id', payload.reservationId)
+      .single()
 
-  const expectedReceiver =
-    reservation.lender_id === callerId ? reservation.borrower_id : reservation.lender_id
-  if (expectedReceiver !== payload.receiverId) {
-    return json(403, { error: 'receiverId does not match the reservation counter-party' })
-  }
+    if (resError || !reservation) {
+      return json(404, { error: 'Reservation not found' })
+    }
 
-  const { data: receiverRow } = await adminClient
-    .from('users')
-    .select('fcm_token')
-    .eq('id', payload.receiverId)
-    .single()
+    const isCallerParticipant =
+      reservation.lender_id === callerId || reservation.borrower_id === callerId
+    if (!isCallerParticipant) {
+      return json(403, { error: 'Not a participant of this reservation' })
+    }
 
-  if (!receiverRow?.fcm_token) {
-    return json(404, { error: 'Receiver has no FCM token registered' })
-  }
+    const expectedReceiver =
+      reservation.lender_id === callerId ? reservation.borrower_id : reservation.lender_id
+    if (expectedReceiver !== payload.receiverId) {
+      return json(403, { error: 'receiverId does not match the reservation counter-party' })
+    }
 
-  const accessToken = await getAccessToken()
-  const fcmRes = await fetch(
-    `https://fcm.googleapis.com/v1/projects/${FCM_PROJECT_ID}/messages:send`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        message: {
-          token: receiverRow.fcm_token,
-          notification: { title: payload.title, body: payload.body },
-          data: payload.data ?? {},
+    const { data: receiverRow } = await adminClient
+      .from('users')
+      .select('fcm_token')
+      .eq('id', payload.receiverId)
+      .single()
+
+    if (!receiverRow?.fcm_token) {
+      return json(404, { error: 'Receiver has no FCM token registered' })
+    }
+
+    const accessToken = await getAccessToken()
+    const fcmRes = await fetch(
+      `https://fcm.googleapis.com/v1/projects/${FCM_PROJECT_ID}/messages:send`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
         },
-      }),
-    },
-  )
+        body: JSON.stringify({
+          message: {
+            token: receiverRow.fcm_token,
+            notification: { title: payload.title, body: payload.body },
+            data: payload.data ?? {},
+          },
+        }),
+      },
+    )
 
-  if (!fcmRes.ok) {
-    const text = await fcmRes.text()
-    console.error('FCM send failed', fcmRes.status, text)
-    return json(502, { error: 'FCM send failed', status: fcmRes.status })
+    if (!fcmRes.ok) {
+      const text = await fcmRes.text()
+      console.error('FCM send failed', fcmRes.status, text)
+      return json(502, { error: 'FCM send failed', status: fcmRes.status })
+    }
+
+    const result = await fcmRes.json()
+    return json(200, result)
+  } catch (error) {
+    console.error('push-notification handler error', error)
+    return json(500, { error: 'Internal server error' })
   }
-
-  const result = await fcmRes.json()
-  return json(200, result)
 })

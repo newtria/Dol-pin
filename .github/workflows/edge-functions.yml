@@ -8,11 +8,13 @@ on:
     branches: [main]
     paths:
       - 'supabase/functions/**'
+      - 'supabase/migrations/**'
       - '.github/workflows/edge-functions.yml'
   pull_request:
     branches: [main]
     paths:
       - 'supabase/functions/**'
+      - 'supabase/migrations/**'
       - '.github/workflows/edge-functions.yml'
 
 permissions:
