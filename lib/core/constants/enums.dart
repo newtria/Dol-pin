@@ -1,19 +1,37 @@
 import '../../l10n/app_localizations.dart';
 
+/// Reservation lifecycle. Mirrors the Postgres `reservation_status` ENUM
+/// from migration 017. See docs/escrow-state-machine.md for the diagram.
+///
+/// Naming differences from the old enum:
+/// - `accepted` removed: payment is the acceptance signal (no separate
+///   lender-approval step before PortOne capture).
+/// - `completed` → `settled`: explicitly names the money-distributed
+///   terminal state; `completed` was ambiguous.
+/// - `returned_` → `returned`: the underscore was only there to avoid the
+///   Dart reserved word `return`, but `returned` is fine as an identifier.
+/// - `settled` and `resolved` added (terminal states).
 enum ReservationStatus {
   pending,
-  accepted,
   paid,
   pickedUp('picked_up'),
-  returned_('returned'),
-  completed,
+  returned,
+  settled,
   cancelled,
-  disputed;
+  disputed,
+  resolved;
 
   const ReservationStatus([this._value]);
   final String? _value;
 
   String get value => _value ?? name;
+
+  /// Terminal states cannot be transitioned out of. Three of them, one per
+  /// money-distribution outcome (see docs/escrow-state-machine.md).
+  bool get isTerminal => switch (this) {
+        settled || cancelled || resolved => true,
+        _ => false,
+      };
 
   static ReservationStatus fromString(String s) =>
       values.firstWhere((e) => e.value == s, orElse: () => pending);

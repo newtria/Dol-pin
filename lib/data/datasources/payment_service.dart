@@ -295,4 +295,39 @@ class PaymentService {
     final gateway = gatewayForCurrency(currency);
     return gateway.refund(paymentRef, amount: amount);
   }
+
+  /// Calls the `settle-reservation` Edge Function. Refunds the deposit
+  /// portion to the borrower and advances state `returned → settled`.
+  /// Lender-only — see docs/escrow-state-machine.md.
+  ///
+  /// Returned int is the deposit amount actually refunded by PortOne
+  /// (may differ from the reservation's `deposit` column if PortOne
+  /// adjusted for fees).
+  Future<Result<int>> settle({
+    required String reservationId,
+    required String authJwt,
+  }) async {
+    try {
+      final res = await http
+          .post(
+            Uri.parse('${Env.supabaseUrl}/functions/v1/settle-reservation'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $authJwt',
+              'apikey': Env.supabaseAnonKey,
+            },
+            body: jsonEncode({'reservation_id': reservationId}),
+          )
+          .timeout(_paymentTimeout);
+      if (res.statusCode != 200) {
+        return Fail(PaymentFailure('Settlement failed (${res.statusCode})'));
+      }
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return Success((data['refunded_amount'] as num?)?.toInt() ?? 0);
+    } on TimeoutException {
+      return const Fail(PaymentFailure('Settlement request timed out'));
+    } catch (e) {
+      return Fail(PaymentFailure(e.toString()));
+    }
+  }
 }

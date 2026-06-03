@@ -248,19 +248,33 @@ Deno.serve(async (req) => {
 
   const normalized = normalizeStatus(payment.status)
 
-  // Advance the reservation state once, idempotently.
+  // Advance the reservation state once, idempotently. The status column
+  // is gated by a trigger (migration 017); only the `transition_reservation_status`
+  // RPC may move it. We stamp the payment_provider / payment_id columns
+  // directly because those evidence-fields are not gated.
   if (normalized === 'success' && reservation.status === 'pending') {
-    const { error: updateError } = await adminClient
+    const { error: stampError } = await adminClient
       .from('reservations')
       .update({
         payment_provider: 'portone',
         payment_id: impUid,
-        status: 'confirmed',
       })
       .eq('id', reservationId)
-    if (updateError) {
-      console.error('reservation update failed', updateError)
+    if (stampError) {
+      console.error('reservation stamp failed', stampError)
       return jsonResponse(500, { error: 'Failed to update reservation' })
+    }
+    const { data: txResult, error: txError } = await adminClient.rpc(
+      'transition_reservation_status',
+      {
+        p_reservation_id: reservationId,
+        p_target: 'paid',
+        p_actor_kind: 'system',
+      },
+    )
+    if (txError || txResult?.ok !== true) {
+      console.error('reservation transition failed', { txError, txResult })
+      return jsonResponse(500, { error: 'Failed to transition reservation' })
     }
   }
 
