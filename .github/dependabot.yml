@@ -10,9 +10,33 @@ updates:
     labels:
       - "dependencies"
       - "pub"
+    ignore:
+      # These majors require source migrations and should not keep opening
+      # red CI PRs until the migration work is scheduled explicitly.
+      - dependency-name: "flutter_riverpod"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "riverpod"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "riverpod_annotation"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "riverpod_generator"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "riverpod_lint"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "go_router"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "share_plus"
+        update-types:
+          - "version-update:semver-major"
     # Group patch / minor bumps so they land as a single PR per week
-    # instead of a flood that nobody triages. Major bumps still come in
-    # as individual PRs because they tend to be breaking.
+    # instead of a flood that nobody triages. Allowed major bumps still
+    # come in as individual PRs because they tend to be breaking.
     groups:
       pub-production-patches:
         dependency-type: "production"
