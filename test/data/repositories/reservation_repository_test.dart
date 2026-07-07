@@ -1,51 +1,17 @@
-import 'dart:async';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:dolpin/core/constants/enums.dart';
 import 'package:dolpin/core/errors/failures.dart';
 import 'package:dolpin/data/repositories/reservation_repository.dart';
+import '../../helpers/postgrest_fakes.dart';
 
 class MockSupabaseClient extends Mock implements SupabaseClient {}
-
-class MockSupabaseQueryBuilder extends Mock implements SupabaseQueryBuilder {}
-
-class MockPostgrestFilterBuilder extends Mock
-    implements PostgrestFilterBuilder {}
-
-/// A fake [PostgrestBuilder] that resolves to [_value] when awaited.
-class FakePostgrestResponse<T> extends Fake implements PostgrestBuilder<T> {
-  final T _value;
-  FakePostgrestResponse(this._value);
-
-  @override
-  Future<S> then<S>(FutureOr<S> Function(T value) onValue,
-          {Function? onError}) =>
-      Future<T>.value(_value).then(onValue, onError: onError);
-
-  @override
-  Future<T> catchError(Function onError,
-          {bool Function(Object error)? test}) =>
-      Future<T>.value(_value);
-
-  @override
-  Future<T> whenComplete(FutureOr<void> Function() action) =>
-      Future<T>.value(_value).whenComplete(action);
-
-  @override
-  Stream<T> asStream() => Stream.value(_value);
-
-  @override
-  Future<T> timeout(Duration timeLimit,
-          {FutureOr<T> Function()? onTimeout}) =>
-      Future<T>.value(_value);
-}
 
 void main() {
   late MockSupabaseClient mockClient;
   late MockSupabaseQueryBuilder mockQueryBuilder;
-  late MockPostgrestFilterBuilder mockFilterBuilder;
+  late MockPostgrestFilterBuilder<PostgrestList> mockFilterBuilder;
   late ReservationRepository repository;
 
   final sampleReservation = {
@@ -66,8 +32,10 @@ void main() {
   setUp(() {
     mockClient = MockSupabaseClient();
     mockQueryBuilder = MockSupabaseQueryBuilder();
-    mockFilterBuilder = MockPostgrestFilterBuilder();
-    when(() => mockClient.from('reservations')).thenReturn(mockQueryBuilder);
+    mockFilterBuilder = MockPostgrestFilterBuilder<PostgrestList>();
+    when(
+      () => mockClient.from('reservations'),
+    ).thenAnswer((_) => mockQueryBuilder);
     repository = ReservationRepository(mockClient);
   });
 
@@ -84,10 +52,15 @@ void main() {
         'total_paid': 60000,
         'currency': 'KRW',
       };
-      when(() => mockQueryBuilder.insert(input)).thenReturn(mockFilterBuilder);
-      when(() => mockFilterBuilder.select()).thenReturn(mockFilterBuilder);
-      when(() => mockFilterBuilder.single())
-          .thenReturn(FakePostgrestResponse<PostgrestMap>(sampleReservation));
+      when(
+        () => mockQueryBuilder.insert(input),
+      ).thenAnswer((_) => mockFilterBuilder);
+      when(
+        () => mockFilterBuilder.select(),
+      ).thenAnswer((_) => mockFilterBuilder);
+      when(() => mockFilterBuilder.single()).thenAnswer(
+        (_) => FakePostgrestResponse<PostgrestMap>(sampleReservation),
+      );
 
       final result = await repository.create(input);
       expect(result.isSuccess, isTrue);
@@ -97,8 +70,9 @@ void main() {
     });
 
     test('returns Fail on insert error', () async {
-      when(() => mockQueryBuilder.insert(any()))
-          .thenThrow(PostgrestException(message: 'insert failed', code: '500'));
+      when(
+        () => mockQueryBuilder.insert(any()),
+      ).thenThrow(PostgrestException(message: 'insert failed', code: '500'));
 
       final result = await repository.create({'item_id': 'item-1'});
       expect(result.isFailure, isTrue);
@@ -108,11 +82,15 @@ void main() {
 
   group('getById', () {
     test('returns Success with reservation data', () async {
-      when(() => mockQueryBuilder.select()).thenReturn(mockFilterBuilder);
-      when(() => mockFilterBuilder.eq('id', 'res-1'))
-          .thenReturn(mockFilterBuilder);
-      when(() => mockFilterBuilder.single())
-          .thenReturn(FakePostgrestResponse<PostgrestMap>(sampleReservation));
+      when(
+        () => mockQueryBuilder.select(),
+      ).thenAnswer((_) => mockFilterBuilder);
+      when(
+        () => mockFilterBuilder.eq('id', 'res-1'),
+      ).thenAnswer((_) => mockFilterBuilder);
+      when(() => mockFilterBuilder.single()).thenAnswer(
+        (_) => FakePostgrestResponse<PostgrestMap>(sampleReservation),
+      );
 
       final result = await repository.getById('res-1');
       expect(result.isSuccess, isTrue);
@@ -121,10 +99,12 @@ void main() {
     });
 
     test('returns Fail with NotFoundFailure when not found', () async {
-      when(() => mockQueryBuilder.select()).thenReturn(mockFilterBuilder);
-      when(() => mockFilterBuilder.eq('id', 'nonexistent')).thenThrow(
-        PostgrestException(message: 'not found', code: 'PGRST116'),
-      );
+      when(
+        () => mockQueryBuilder.select(),
+      ).thenAnswer((_) => mockFilterBuilder);
+      when(
+        () => mockFilterBuilder.eq('id', 'nonexistent'),
+      ).thenThrow(PostgrestException(message: 'not found', code: 'PGRST116'));
 
       final result = await repository.getById('nonexistent');
       expect(result.isFailure, isTrue);
@@ -134,22 +114,29 @@ void main() {
 
   group('updateStatus', () {
     test('returns Success on status update', () async {
-      when(() => mockQueryBuilder.update({'status': 'accepted'}))
-          .thenReturn(mockFilterBuilder);
-      when(() => mockFilterBuilder.eq('id', 'res-1'))
-          .thenReturn(FakePostgrestResponse<dynamic>([sampleReservation]));
+      when(
+        () => mockQueryBuilder.update({'status': 'accepted'}),
+      ).thenAnswer((_) => mockFilterBuilder);
+      when(() => mockFilterBuilder.eq('id', 'res-1')).thenAnswer(
+        (_) => FakePostgrestResponse<PostgrestList>([sampleReservation]),
+      );
 
       final result = await repository.updateStatus(
-          'res-1', ReservationStatus.accepted);
+        'res-1',
+        ReservationStatus.accepted,
+      );
       expect(result.isSuccess, isTrue);
     });
 
     test('returns Fail on error', () async {
-      when(() => mockQueryBuilder.update({'status': 'cancelled'}))
-          .thenThrow(PostgrestException(message: 'update error', code: '500'));
+      when(
+        () => mockQueryBuilder.update({'status': 'cancelled'}),
+      ).thenThrow(PostgrestException(message: 'update error', code: '500'));
 
       final result = await repository.updateStatus(
-          'res-1', ReservationStatus.cancelled);
+        'res-1',
+        ReservationStatus.cancelled,
+      );
       expect(result.isFailure, isTrue);
       expect(result.failure, isA<ServerFailure>());
     });
@@ -157,38 +144,53 @@ void main() {
 
   group('confirmPickup', () {
     test('returns Success on pickup confirmation', () async {
-      when(() => mockQueryBuilder.update(any())).thenReturn(mockFilterBuilder);
-      when(() => mockFilterBuilder.eq('id', 'res-1'))
-          .thenReturn(FakePostgrestResponse<dynamic>([sampleReservation]));
+      when(
+        () => mockQueryBuilder.update(any()),
+      ).thenAnswer((_) => mockFilterBuilder);
+      when(() => mockFilterBuilder.eq('id', 'res-1')).thenAnswer(
+        (_) => FakePostgrestResponse<PostgrestList>([sampleReservation]),
+      );
 
       final result = await repository.confirmPickup('res-1');
       expect(result.isSuccess, isTrue);
-      verify(() => mockQueryBuilder.update(any(
-            that: containsPair('status', 'picked_up'),
-          ))).called(1);
+      verify(
+        () => mockQueryBuilder.update(
+          any(that: containsPair('status', 'picked_up')),
+        ),
+      ).called(1);
     });
   });
 
   group('confirmReturn', () {
     test('returns Success on return confirmation', () async {
-      when(() => mockQueryBuilder.update(any())).thenReturn(mockFilterBuilder);
-      when(() => mockFilterBuilder.eq('id', 'res-1'))
-          .thenReturn(FakePostgrestResponse<dynamic>([sampleReservation]));
+      when(
+        () => mockQueryBuilder.update(any()),
+      ).thenAnswer((_) => mockFilterBuilder);
+      when(() => mockFilterBuilder.eq('id', 'res-1')).thenAnswer(
+        (_) => FakePostgrestResponse<PostgrestList>([sampleReservation]),
+      );
 
-      final result = await repository.confirmReturn('res-1',
-          returnPhoto: 'https://example.com/return.jpg');
+      final result = await repository.confirmReturn(
+        'res-1',
+        returnPhoto: 'https://example.com/return.jpg',
+      );
       expect(result.isSuccess, isTrue);
-      verify(() => mockQueryBuilder.update(any(
+      verify(
+        () => mockQueryBuilder.update(
+          any(
             that: allOf(
               containsPair('status', 'returned'),
               containsPair('return_photo', 'https://example.com/return.jpg'),
             ),
-          ))).called(1);
+          ),
+        ),
+      ).called(1);
     });
 
     test('returns Fail on error', () async {
-      when(() => mockQueryBuilder.update(any()))
-          .thenThrow(PostgrestException(message: 'update failed', code: '500'));
+      when(
+        () => mockQueryBuilder.update(any()),
+      ).thenThrow(PostgrestException(message: 'update failed', code: '500'));
 
       final result = await repository.confirmReturn('res-1');
       expect(result.isFailure, isTrue);
