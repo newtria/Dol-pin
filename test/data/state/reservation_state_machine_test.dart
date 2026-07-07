@@ -70,15 +70,7 @@ void main() {
       );
     });
 
-    test('returned → settled by lender OR system', () {
-      expect(
-        ReservationStateMachine.canTransition(
-          from: ReservationStatus.returned,
-          to: ReservationStatus.settled,
-          actor: TransitionActor.lender,
-        ),
-        isTrue,
-      );
+    test('returned → settled is system-only', () {
       expect(
         ReservationStateMachine.canTransition(
           from: ReservationStatus.returned,
@@ -95,6 +87,15 @@ void main() {
         ),
         isFalse,
         reason: 'borrower must not be able to force-settle',
+      );
+      expect(
+        ReservationStateMachine.canTransition(
+          from: ReservationStatus.returned,
+          to: ReservationStatus.settled,
+          actor: TransitionActor.lender,
+        ),
+        isFalse,
+        reason: 'lender settlement must go through settle-reservation',
       );
     });
 
@@ -245,33 +246,33 @@ void main() {
       }
     });
 
-    test('borrower from paid: cancelled only', () {
+    test('borrower from paid: no direct state transitions', () {
       expect(
         ReservationStateMachine.legalTargetsFor(
           from: ReservationStatus.paid,
           actor: TransitionActor.borrower,
         ),
-        equals({ReservationStatus.cancelled}),
+        isEmpty,
       );
     });
 
-    test('lender from paid: pickedUp + cancelled', () {
+    test('lender from paid: pickedUp only', () {
       expect(
         ReservationStateMachine.legalTargetsFor(
           from: ReservationStatus.paid,
           actor: TransitionActor.lender,
         ),
-        equals({ReservationStatus.pickedUp, ReservationStatus.cancelled}),
+        equals({ReservationStatus.pickedUp}),
       );
     });
 
-    test('lender from returned: settled + disputed', () {
+    test('lender from returned: disputed only', () {
       expect(
         ReservationStateMachine.legalTargetsFor(
           from: ReservationStatus.returned,
           actor: TransitionActor.lender,
         ),
-        equals({ReservationStatus.settled, ReservationStatus.disputed}),
+        equals({ReservationStatus.disputed}),
       );
     });
 

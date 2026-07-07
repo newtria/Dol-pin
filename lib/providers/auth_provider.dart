@@ -18,8 +18,5 @@ final currentUserProvider = FutureProvider<UserModel?>((ref) async {
   final userId = ref.watch(currentUserIdProvider);
   if (userId == null) return null;
   final result = await ref.read(authRepositoryProvider).getProfile(userId);
-  return result.when(
-    success: (user) => user,
-    failure: (_) => null,
-  );
+  return result.when(success: (user) => user, failure: (_) => null);
 });

@@ -5,6 +5,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 sealed class Failure {
   const Failure(this.message);
   final String message;
+
+  @override
+  String toString() => '$runtimeType: $message';
 }
 
 class ServerFailure extends Failure {
@@ -36,7 +39,7 @@ class PaymentFailure extends Failure {
 /// it and render a localized message instead of the raw fallback text.
 class OtpRateLimitFailure extends ValidationFailure {
   const OtpRateLimitFailure({this.cooldownSeconds = 60})
-      : super('OTP rate limit: please retry shortly');
+    : super('OTP rate limit: please retry shortly');
   final int cooldownSeconds;
 }
 

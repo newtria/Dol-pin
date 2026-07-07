@@ -29,12 +29,36 @@ enum ReservationStatus {
   /// Terminal states cannot be transitioned out of. Three of them, one per
   /// money-distribution outcome (see docs/escrow-state-machine.md).
   bool get isTerminal => switch (this) {
-        settled || cancelled || resolved => true,
-        _ => false,
-      };
+    settled || cancelled || resolved => true,
+    _ => false,
+  };
 
-  static ReservationStatus fromString(String s) =>
-      values.firstWhere((e) => e.value == s, orElse: () => pending);
+  String localizedLabel(AppLocalizations l) => switch (this) {
+    pending => l.reservationStatusPending,
+    paid => l.reservationStatusPaid,
+    pickedUp => l.reservationStatusPickedUp,
+    returned => l.reservationStatusReturned,
+    settled => l.reservationStatusSettled,
+    cancelled => l.reservationStatusCancelled,
+    disputed => l.reservationStatusDisputed,
+    resolved => l.reservationStatusResolved,
+  };
+
+  static ReservationStatus? tryParse(String? s) {
+    if (s == null) return null;
+    for (final status in values) {
+      if (status.value == s) return status;
+    }
+    return null;
+  }
+
+  static ReservationStatus fromString(String s) {
+    final status = tryParse(s);
+    if (status == null) {
+      throw FormatException('Unknown reservation status', s);
+    }
+    return status;
+  }
 }
 
 enum ItemStatus {
@@ -56,22 +80,22 @@ enum ItemCategory {
   etc;
 
   String get label => switch (this) {
-        lightstick => 'Lightstick',
-        phone => 'Phone',
-        camera => 'Camera',
-        slogan => 'Slogan',
-        costume => 'Costume',
-        etc => 'Other',
-      };
+    lightstick => 'Lightstick',
+    phone => 'Phone',
+    camera => 'Camera',
+    slogan => 'Slogan',
+    costume => 'Costume',
+    etc => 'Other',
+  };
 
   String localizedLabel(AppLocalizations l) => switch (this) {
-        lightstick => l.categoryLightstick,
-        phone => l.categoryPhone,
-        camera => l.categoryCamera,
-        slogan => l.categorySlogan,
-        costume => l.categoryCostume,
-        etc => l.categoryOther,
-      };
+    lightstick => l.categoryLightstick,
+    phone => l.categoryPhone,
+    camera => l.categoryCamera,
+    slogan => l.categorySlogan,
+    costume => l.categoryCostume,
+    etc => l.categoryOther,
+  };
 
   static ItemCategory fromString(String s) =>
       values.firstWhere((e) => e.name == s, orElse: () => etc);
@@ -93,16 +117,16 @@ enum PickupMethod {
   both;
 
   String get label => switch (this) {
-        direct => 'Direct Meetup',
-        delivery => 'Delivery',
-        both => 'Both',
-      };
+    direct => 'Direct Meetup',
+    delivery => 'Delivery',
+    both => 'Both',
+  };
 
   String localizedLabel(AppLocalizations l) => switch (this) {
-        direct => l.pickupDirect,
-        delivery => l.pickupDelivery,
-        both => l.pickupBoth,
-      };
+    direct => l.pickupDirect,
+    delivery => l.pickupDelivery,
+    both => l.pickupBoth,
+  };
 
   static PickupMethod fromString(String s) =>
       values.firstWhere((e) => e.name == s, orElse: () => direct);

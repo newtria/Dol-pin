@@ -66,8 +66,10 @@ class PhotoUpload extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.add_photo_alternate_outlined,
-                          color: AppColors.textHint),
+                      const Icon(
+                        Icons.add_photo_alternate_outlined,
+                        color: AppColors.textHint,
+                      ),
                       const SizedBox(height: 4),
                       Text(
                         l.add,
@@ -119,7 +121,9 @@ class PhotoUpload extends StatelessWidget {
                           left: 4,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.primary,
                               borderRadius: BorderRadius.circular(4),

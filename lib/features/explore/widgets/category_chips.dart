@@ -19,6 +19,7 @@ class CategoryChips extends StatelessWidget {
     ('camera', l.categoryCamera, Icons.camera_alt),
     ('slogan', l.categorySlogan, Icons.flag),
     ('costume', l.categoryCostume, Icons.checkroom),
+    ('etc', l.categoryOther, Icons.more_horiz),
   ];
 
   @override
@@ -50,8 +51,7 @@ class CategoryChips extends StatelessWidget {
             checkmarkColor: AppColors.primary,
             backgroundColor: AppColors.surface,
             side: BorderSide(
-              color:
-                  isSelected ? AppColors.primary : AppColors.divider,
+              color: isSelected ? AppColors.primary : AppColors.divider,
             ),
           );
         },

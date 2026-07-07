@@ -163,6 +163,95 @@ class AppLocalizationsJa extends AppLocalizations {
   String get reservationFailed => '予約に失敗しました';
 
   @override
+  String paymentNotConfigured(Object currency) {
+    return '$currency決済はまだ設定されていません';
+  }
+
+  @override
+  String get paymentVerificationPending => '支払いを受け付けました。まだ確認を完了できないため、この予約は確認待ちになります。';
+
+  @override
+  String get paymentVerificationFailed => '決済確認に失敗しました';
+
+  @override
+  String get chatWillBeAvailableAfterConfirmation => '予約が作成されました。確認後、予約詳細からチャットを開けます。';
+
+  @override
+  String get reservationCancelled => '予約をキャンセルしました';
+
+  @override
+  String get pickupConfirmed => '受け取りを確認しました';
+
+  @override
+  String get returnConfirmed => '返却を確認しました';
+
+  @override
+  String get reservationSettled => '予約を精算しました';
+
+  @override
+  String get reservationStatusPending => '予約待ち';
+
+  @override
+  String get reservationStatusPaid => '支払い済み';
+
+  @override
+  String get reservationStatusPickedUp => '受け取り済み';
+
+  @override
+  String get reservationStatusReturned => '返却済み';
+
+  @override
+  String get reservationStatusSettled => '精算済み';
+
+  @override
+  String get reservationStatusCancelled => 'キャンセル済み';
+
+  @override
+  String get reservationStatusDisputed => '異議申し立て中';
+
+  @override
+  String get reservationStatusResolved => '解決済み';
+
+  @override
+  String get disputeOpened => '異議申し立てを開始しました';
+
+  @override
+  String get confirmPickup => '受け取り確認';
+
+  @override
+  String get cancelAndRefund => 'キャンセルして返金';
+
+  @override
+  String get confirmReturn => '返却確認';
+
+  @override
+  String get settleDeposit => '保証金を精算';
+
+  @override
+  String get confirmRefundMessage => '予約をキャンセルして返金を申請します。続行しますか？';
+
+  @override
+  String get confirmSettlementMessage => 'デポジットを返金し、予約を終了します。続行しますか？';
+
+  @override
+  String get openDispute => '異議申し立て';
+
+  @override
+  String get openChat => 'チャットを開く';
+
+  @override
+  String get reservationId => '予約ID';
+
+  @override
+  String get paymentId => '決済ID';
+
+  @override
+  String get disputeReason => '異議申し立て理由';
+
+  @override
+  String get describeIssue => '問題を説明してください';
+
+  @override
   String get bookNow => '今すぐ予約';
 
   @override
@@ -198,6 +287,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get registerItem => 'アイテム登録';
 
   @override
+  String get concert => 'コンサート';
+
+  @override
+  String get selectConcert => 'コンサートを選択';
+
+  @override
   String get category => 'カテゴリ';
 
   @override
@@ -222,6 +317,18 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get pickupMethod => '受取方法';
+
+  @override
+  String get availability => '利用可能期間';
+
+  @override
+  String get selectAvailability => '利用可能期間を選択';
+
+  @override
+  String get pickupLocation => '受取場所';
+
+  @override
+  String get pickupLocationHint => '例: KSPO Dome 2番ゲート';
 
   @override
   String get register => '登録';

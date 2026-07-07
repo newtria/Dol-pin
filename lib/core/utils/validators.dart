@@ -58,6 +58,11 @@ class Validators {
 
   /// Sanitizes a search query: trims, removes control characters, limits length.
   static String sanitizeSearch(String query, {int maxLength = 200}) {
-    return query.trim().replaceAll(_controlChars, '').characters.take(maxLength).toString();
+    return query
+        .trim()
+        .replaceAll(_controlChars, '')
+        .characters
+        .take(maxLength)
+        .toString();
   }
 }

@@ -152,9 +152,9 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                       .read(authRepositoryProvider)
                       .signInWithOtp(widget.phone);
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(l.codeResent)),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(l.codeResent)));
                   }
                 },
                 child: Text(l.resendCode),

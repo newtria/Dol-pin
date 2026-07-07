@@ -63,7 +63,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     result.when(
       success: (_) {},
       failure: (f) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppLocalizations.of(context)!.appleSignInFailed}: ${f.message}')),
+        SnackBar(
+          content: Text(
+            '${AppLocalizations.of(context)!.appleSignInFailed}: ${f.message}',
+          ),
+        ),
       ),
     );
   }
@@ -74,7 +78,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     result.when(
       success: (_) {},
       failure: (f) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppLocalizations.of(context)!.googleSignInFailed}: ${f.message}')),
+        SnackBar(
+          content: Text(
+            '${AppLocalizations.of(context)!.googleSignInFailed}: ${f.message}',
+          ),
+        ),
       ),
     );
   }
@@ -93,18 +101,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               Text(
                 l.appTitle,
                 style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                      color: AppColors.primary,
-                      fontSize: 40,
-                      fontWeight: FontWeight.w900,
-                    ),
+                  color: AppColors.primary,
+                  fontSize: 40,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 l.tagline,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppColors.textSecondary,
-                      height: 1.5,
-                    ),
+                  color: AppColors.textSecondary,
+                  height: 1.5,
+                ),
               ),
               const Spacer(flex: 3),
               TextField(

@@ -20,6 +20,19 @@ enum PaymentStatus {
       values.firstWhere((e) => e.name == s, orElse: () => failed);
 }
 
+String _edgeErrorMessage(http.Response res, String fallback) {
+  try {
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final error = data['error']?.toString();
+    final impUid = data['imp_uid']?.toString();
+    if (error == null || error.isEmpty) return fallback;
+    if (impUid == null || impUid.isEmpty) return error;
+    return '$error (imp_uid: $impUid)';
+  } catch (_) {
+    return fallback;
+  }
+}
+
 /// Payment result data.
 ///
 /// Two distinct identifiers live here because PortOne (and most PG providers)
@@ -38,6 +51,8 @@ class PaymentResult {
   const PaymentResult({
     required this.merchantUid,
     this.impUid,
+    this.reservationId,
+    this.roomId,
     required this.status,
     required this.amount,
     required this.currency,
@@ -45,6 +60,8 @@ class PaymentResult {
 
   final String merchantUid;
   final String? impUid;
+  final String? reservationId;
+  final String? roomId;
   final PaymentStatus status;
   final int amount;
   final String currency;
@@ -88,10 +105,17 @@ abstract class PaymentGateway {
 
   /// Verifies a prior charge. [paymentRef] is the provider's transaction id
   /// (PortOne `imp_uid`, Stripe `payment_intent_id`, Xendit `invoice_id`).
-  Future<Result<PaymentResult>> checkStatus(String paymentRef);
+  Future<Result<PaymentResult>> checkStatus(
+    String paymentRef, {
+    String? authJwt,
+  });
 
   /// Requests a refund. [paymentRef] matches the one from [checkStatus].
-  Future<Result<void>> refund(String paymentRef, {int? amount});
+  Future<Result<void>> refund(
+    String paymentRef, {
+    int? amount,
+    String? authJwt,
+  });
 }
 
 /// PortOne (Korea) implementation
@@ -139,43 +163,61 @@ class PortOneGateway implements PaymentGateway {
     // Payment is initiated via PaymentScreen widget (IamportPayment).
     // This method returns a pending result with the merchant UID. `impUid` is
     // unknown until the PortOne WebView callback fires.
-    return Success(PaymentResult(
-      merchantUid: _generateMerchantUid(reservationId),
-      impUid: null,
-      status: PaymentStatus.pending,
-      amount: amount,
-      currency: currency,
-    ));
+    return Success(
+      PaymentResult(
+        merchantUid: _generateMerchantUid(reservationId),
+        impUid: null,
+        status: PaymentStatus.pending,
+        amount: amount,
+        currency: currency,
+      ),
+    );
   }
 
   /// Verifies payment status via the `verify-payment` edge function.
   /// The server holds the imp_secret and calls the PortOne API on our behalf.
   @override
-  Future<Result<PaymentResult>> checkStatus(String paymentRef) async {
+  Future<Result<PaymentResult>> checkStatus(
+    String paymentRef, {
+    String? authJwt,
+  }) async {
+    if (authJwt == null || authJwt.isEmpty) {
+      return const Fail(PaymentFailure('Authentication required'));
+    }
     try {
       final res = await http
           .post(
             Uri.parse('${Env.supabaseUrl}/functions/v1/verify-payment'),
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer ${Env.supabaseAnonKey}',
+              'Authorization': 'Bearer $authJwt',
+              'apikey': Env.supabaseAnonKey,
             },
             body: jsonEncode({'imp_uid': paymentRef}),
           )
           .timeout(_paymentTimeout);
       if (res.statusCode != 200) {
-        return Fail(PaymentFailure(
-          'Failed to verify payment (${res.statusCode})',
-        ));
+        return Fail(
+          PaymentFailure(
+            _edgeErrorMessage(
+              res,
+              'Failed to verify payment (${res.statusCode})',
+            ),
+          ),
+        );
       }
       final data = jsonDecode(res.body) as Map<String, dynamic>;
-      return Success(PaymentResult(
-        merchantUid: data['merchant_uid'] as String? ?? '',
-        impUid: data['imp_uid'] as String?,
-        status: PaymentStatus.fromString(data['status'] as String? ?? ''),
-        amount: (data['amount'] as num?)?.toInt() ?? 0,
-        currency: data['currency'] as String? ?? 'KRW',
-      ));
+      return Success(
+        PaymentResult(
+          merchantUid: data['merchant_uid'] as String? ?? '',
+          impUid: data['imp_uid'] as String?,
+          reservationId: data['reservation_id'] as String?,
+          roomId: data['room_id'] as String?,
+          status: PaymentStatus.fromString(data['status'] as String? ?? ''),
+          amount: (data['amount'] as num?)?.toInt() ?? 0,
+          currency: data['currency'] as String? ?? 'KRW',
+        ),
+      );
     } on TimeoutException {
       return const Fail(PaymentFailure('Payment verification timed out'));
     } catch (e) {
@@ -185,7 +227,14 @@ class PortOneGateway implements PaymentGateway {
 
   /// Requests a refund via the `refund-payment` edge function.
   @override
-  Future<Result<void>> refund(String paymentRef, {int? amount}) async {
+  Future<Result<void>> refund(
+    String paymentRef, {
+    int? amount,
+    String? authJwt,
+  }) async {
+    if (authJwt == null || authJwt.isEmpty) {
+      return const Fail(PaymentFailure('Authentication required'));
+    }
     try {
       final body = <String, dynamic>{'imp_uid': paymentRef};
       if (amount != null) body['amount'] = amount;
@@ -195,13 +244,18 @@ class PortOneGateway implements PaymentGateway {
             Uri.parse('${Env.supabaseUrl}/functions/v1/refund-payment'),
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer ${Env.supabaseAnonKey}',
+              'Authorization': 'Bearer $authJwt',
+              'apikey': Env.supabaseAnonKey,
             },
             body: jsonEncode(body),
           )
           .timeout(_paymentTimeout);
       if (res.statusCode != 200) {
-        return Fail(PaymentFailure('Refund failed (${res.statusCode})'));
+        return Fail(
+          PaymentFailure(
+            _edgeErrorMessage(res, 'Refund failed (${res.statusCode})'),
+          ),
+        );
       }
       return const Success(null);
     } on TimeoutException {
@@ -227,12 +281,19 @@ class XenditGateway implements PaymentGateway {
   }
 
   @override
-  Future<Result<PaymentResult>> checkStatus(String paymentRef) async {
+  Future<Result<PaymentResult>> checkStatus(
+    String paymentRef, {
+    String? authJwt,
+  }) async {
     return const Fail(ServerFailure('Xendit not yet configured'));
   }
 
   @override
-  Future<Result<void>> refund(String paymentRef, {int? amount}) async {
+  Future<Result<void>> refund(
+    String paymentRef, {
+    int? amount,
+    String? authJwt,
+  }) async {
     return const Fail(ServerFailure('Xendit not yet configured'));
   }
 }
@@ -250,12 +311,19 @@ class StripeGateway implements PaymentGateway {
   }
 
   @override
-  Future<Result<PaymentResult>> checkStatus(String paymentRef) async {
+  Future<Result<PaymentResult>> checkStatus(
+    String paymentRef, {
+    String? authJwt,
+  }) async {
     return const Fail(ServerFailure('Stripe not yet configured'));
   }
 
   @override
-  Future<Result<void>> refund(String paymentRef, {int? amount}) async {
+  Future<Result<void>> refund(
+    String paymentRef, {
+    int? amount,
+    String? authJwt,
+  }) async {
     return const Fail(ServerFailure('Stripe not yet configured'));
   }
 }
@@ -267,10 +335,10 @@ final paymentServiceProvider = Provider<PaymentService>((ref) {
 
 class PaymentService {
   PaymentGateway gatewayForCurrency(String currency) => switch (currency) {
-        'KRW' => PortOneGateway(),
-        'IDR' => XenditGateway(),
-        _ => StripeGateway(),
-      };
+    'KRW' => PortOneGateway(),
+    'IDR' => XenditGateway(),
+    _ => StripeGateway(),
+  };
 
   Future<Result<PaymentResult>> pay({
     required String reservationId,
@@ -290,10 +358,11 @@ class PaymentService {
   Future<Result<void>> refund({
     required String paymentRef,
     required String currency,
+    required String authJwt,
     int? amount,
   }) {
     final gateway = gatewayForCurrency(currency);
-    return gateway.refund(paymentRef, amount: amount);
+    return gateway.refund(paymentRef, amount: amount, authJwt: authJwt);
   }
 
   /// Calls the `settle-reservation` Edge Function. Refunds the deposit
@@ -320,7 +389,11 @@ class PaymentService {
           )
           .timeout(_paymentTimeout);
       if (res.statusCode != 200) {
-        return Fail(PaymentFailure('Settlement failed (${res.statusCode})'));
+        return Fail(
+          PaymentFailure(
+            _edgeErrorMessage(res, 'Settlement failed (${res.statusCode})'),
+          ),
+        );
       }
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       return Success((data['refunded_amount'] as num?)?.toInt() ?? 0);

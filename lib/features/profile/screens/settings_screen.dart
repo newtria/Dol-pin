@@ -57,9 +57,9 @@ class SettingsScreen extends ConsumerWidget {
                 title: Text(l.region),
                 subtitle: Text(l.countryKorea),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(l.comingSoon)),
-                ),
+                onTap: () => ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(l.comingSoon))),
               ),
             ],
           ),
@@ -70,17 +70,17 @@ class SettingsScreen extends ConsumerWidget {
                 secondary: const Icon(Icons.notifications_outlined),
                 title: Text(l.pushNotifications),
                 value: true,
-                onChanged: (v) => ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(l.comingSoon)),
-                ),
+                onChanged: (v) => ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(l.comingSoon))),
               ),
               SwitchListTile(
                 secondary: const Icon(Icons.chat_outlined),
                 title: Text(l.chatNotifications),
                 value: true,
-                onChanged: (v) => ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(l.comingSoon)),
-                ),
+                onChanged: (v) => ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(l.comingSoon))),
               ),
             ],
           ),
@@ -91,14 +91,16 @@ class SettingsScreen extends ConsumerWidget {
                 leading: const Icon(Icons.download_outlined),
                 title: Text(l.exportMyData),
                 subtitle: Text(l.downloadAsJson),
-                onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(l.comingSoon)),
-                ),
+                onTap: () => ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(l.comingSoon))),
               ),
               ListTile(
                 leading: Icon(Icons.delete_forever, color: AppColors.error),
-                title: Text(l.deleteAccount,
-                    style: TextStyle(color: AppColors.error)),
+                title: Text(
+                  l.deleteAccount,
+                  style: TextStyle(color: AppColors.error),
+                ),
                 onTap: () async {
                   final confirmed = await ConfirmDialog.show(
                     context,
@@ -118,8 +120,12 @@ class SettingsScreen extends ConsumerWidget {
                           success: (_) {},
                           failure: (f) =>
                               ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('${l.deleteAccountFailed}: ${f.message}')),
-                          ),
+                                SnackBar(
+                                  content: Text(
+                                    '${l.deleteAccountFailed}: ${f.message}',
+                                  ),
+                                ),
+                              ),
                         );
                       }
                     }
@@ -141,7 +147,11 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _showLanguagePicker(BuildContext context, WidgetRef ref, String currentLocale) {
+  void _showLanguagePicker(
+    BuildContext context,
+    WidgetRef ref,
+    String currentLocale,
+  ) {
     final l = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
@@ -165,7 +175,9 @@ class SettingsScreen extends ConsumerWidget {
                   Navigator.pop(context);
                   final userId = ref.read(currentUserIdProvider);
                   if (userId != null) {
-                    ref.read(authRepositoryProvider).updateProfile(userId, {'locale': code});
+                    ref.read(authRepositoryProvider).updateProfile(userId, {
+                      'locale': code,
+                    });
                     ref.invalidate(currentUserProvider);
                   }
                 },
@@ -176,7 +188,11 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _showCurrencyPicker(BuildContext context, WidgetRef ref, String currentCurrency) {
+  void _showCurrencyPicker(
+    BuildContext context,
+    WidgetRef ref,
+    String currentCurrency,
+  ) {
     final l = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
@@ -200,7 +216,9 @@ class SettingsScreen extends ConsumerWidget {
                   Navigator.pop(context);
                   final userId = ref.read(currentUserIdProvider);
                   if (userId != null) {
-                    ref.read(authRepositoryProvider).updateProfile(userId, {'currency': code});
+                    ref.read(authRepositoryProvider).updateProfile(userId, {
+                      'currency': code,
+                    });
                     ref.invalidate(currentUserProvider);
                   }
                 },

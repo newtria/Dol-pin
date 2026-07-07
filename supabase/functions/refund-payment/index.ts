@@ -1,8 +1,8 @@
 // Supabase Edge Function: refund-payment
 //
-// Issues a PortOne cancellation (full or partial refund) for a reservation
-// the caller participates in. Matches the shape of `verify-payment` so both
-// share the same auth + merchant_uid parsing model.
+// Issues a PortOne full cancellation for a reservation the caller participates
+// in. Matches the shape of `verify-payment` so both share the same auth +
+// merchant_uid parsing model.
 //
 // Required secrets (set via `supabase secrets set ...`):
 //   SUPABASE_URL                 — provided by the platform
@@ -12,11 +12,12 @@
 //
 // Flow:
 //   1. Caller must present a valid Supabase JWT.
-//   2. Caller sends `{imp_uid, amount?, reason?}`.
+//   2. Caller sends `{imp_uid, reason?}`. Partial amounts are rejected.
 //   3. We load the PortOne payment to know the reservation id + current state.
 //   4. We load the reservation via service-role and verify caller participates.
-//   5. We call PortOne `/payments/cancel` with the imp_secret.
-//   6. On success, we update the reservation row to reflect the refund.
+//   5. We mark the reservation `refund_pending` to block pickup races.
+//   6. We call PortOne `/payments/cancel` with the imp_secret.
+//   7. On success, we transition the reservation to `cancelled`.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -221,7 +222,9 @@ Deno.serve(async (req) => {
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
   const { data: reservation, error: resError } = await adminClient
     .from('reservations')
-    .select('id, borrower_id, lender_id, total_paid, status')
+    .select(
+      'id, borrower_id, lender_id, total_paid, currency, status, payment_id, payment_action, payment_action_started_at',
+    )
     .eq('id', reservationId)
     .maybeSingle()
 
@@ -235,10 +238,92 @@ Deno.serve(async (req) => {
       error: 'Not a participant of this reservation',
     })
   }
+  if (reservation.payment_id !== impUid) {
+    return jsonResponse(409, { error: 'Payment id does not match reservation' })
+  }
+  if (payment.amount !== reservation.total_paid) {
+    return jsonResponse(409, { error: 'Amount mismatch' })
+  }
+  if (payment.currency && payment.currency !== reservation.currency) {
+    return jsonResponse(409, { error: 'Currency mismatch' })
+  }
+  if (reservation.status === 'cancelled' && payment.status === 'cancelled') {
+    return jsonResponse(200, {
+      imp_uid: impUid,
+      merchant_uid: payment.merchant_uid,
+      cancel_amount: payment.cancel_amount ?? payment.amount,
+      status: 'cancelled',
+      reservation_status: 'cancelled',
+    })
+  }
+  if (
+    reservation.status === 'paid' &&
+    reservation.payment_action === 'refund_pending' &&
+    payment.status === 'cancelled'
+  ) {
+    const { data: retryTxResult, error: retryTxError } = await adminClient.rpc(
+      'transition_reservation_status',
+      {
+        p_reservation_id: reservationId,
+        p_target: 'cancelled',
+        p_actor_kind: 'system',
+        p_reason: reason,
+      },
+    )
+    if (retryTxError || retryTxResult?.ok !== true) {
+      console.error('refund retry transition failed', {
+        retryTxError,
+        retryTxResult,
+        reservationId,
+      })
+      return jsonResponse(500, {
+        error:
+          'Payment already refunded at PortOne but reservation transition failed. Contact support.',
+        imp_uid: impUid,
+      })
+    }
+    return jsonResponse(200, {
+      imp_uid: impUid,
+      merchant_uid: payment.merchant_uid,
+      cancel_amount: payment.cancel_amount ?? payment.amount,
+      status: 'cancelled',
+      reservation_status: 'cancelled',
+    })
+  }
+  if (reservation.status !== 'paid') {
+    return jsonResponse(409, {
+      error: `Cannot refund a reservation in status '${reservation.status}'`,
+    })
+  }
+  if (refundAmount !== undefined && refundAmount !== reservation.total_paid) {
+    return jsonResponse(409, {
+      error: 'Only full reservation refunds are automated',
+    })
+  }
+
+  const { data: beginResult, error: beginError } = await adminClient.rpc(
+    'begin_reservation_payment_action',
+    {
+      p_reservation_id: reservationId,
+      p_action: 'refund_pending',
+      p_payment_id: impUid,
+      p_actor_id: callerId,
+    },
+  )
+  if (beginError || beginResult?.ok !== true) {
+    console.error('begin refund failed', { beginError, beginResult })
+    return jsonResponse(409, {
+      error: beginResult?.error ?? 'Could not start refund',
+    })
+  }
 
   // Don't try to cancel something that isn't actually paid yet, or that
   // PortOne already marked as cancelled.
   if (payment.status !== 'paid') {
+    await adminClient.rpc('clear_reservation_payment_action', {
+      p_reservation_id: reservationId,
+      p_action: 'refund_pending',
+    })
     return jsonResponse(409, {
       error: `Cannot refund a payment with status '${payment.status}'`,
     })
@@ -255,24 +340,32 @@ Deno.serve(async (req) => {
     })
   } catch (e) {
     console.error('PortOne cancel failed', e)
-    return jsonResponse(502, { error: 'PortOne cancel failed' })
+    return jsonResponse(502, {
+      error:
+        'PortOne cancel status is unknown. Retry will reconcile provider state before another cancel.',
+    })
   }
 
-  // Reflect the refund in our own reservation state. If a partial refund,
-  // keep status as 'refund_pending' for a human to resolve; if full, mark
-  // 'refunded'. These status values should match the reservation state
-  // machine once it lands; for now the column is a free-form text.
-  const isFullRefund =
-    refundAmount === undefined || refundAmount >= reservation.total_paid
-  const nextStatus = isFullRefund ? 'refunded' : 'refund_partial'
-
-  const { error: updateError } = await adminClient
-    .from('reservations')
-    .update({ status: nextStatus })
-    .eq('id', reservationId)
-  if (updateError) {
-    console.error('reservation update failed', updateError)
-    // PortOne already cancelled — don't signal total failure.
+  const { data: txResult, error: txError } = await adminClient.rpc(
+    'transition_reservation_status',
+    {
+      p_reservation_id: reservationId,
+      p_target: 'cancelled',
+      p_actor_kind: 'system',
+      p_reason: reason,
+    },
+  )
+  if (txError || txResult?.ok !== true) {
+    console.error('reservation transition failed after refund', {
+      txError,
+      txResult,
+      reservationId,
+    })
+    return jsonResponse(500, {
+      error:
+        'Payment refunded at PortOne but reservation transition failed. Contact support.',
+      imp_uid: impUid,
+    })
   }
 
   return jsonResponse(200, {
@@ -280,5 +373,6 @@ Deno.serve(async (req) => {
     merchant_uid: payment.merchant_uid,
     cancel_amount: cancelled.cancel_amount ?? refundAmount ?? payment.amount,
     status: cancelled.status,
+    reservation_status: 'cancelled',
   })
 })

@@ -17,6 +17,13 @@ class AuthRepository {
 
   DateTime? _lastOtpRequest;
   static const _otpCooldown = Duration(seconds: 60);
+  static const _ownProfileColumns =
+      'id, phone, nickname, profile_image, is_lender, identity_verified, '
+      'lender_grade, fav_groups, country, region, locale, currency, '
+      'response_rate, created_at, deleted_at';
+  static const _publicProfileColumns =
+      'id, nickname, profile_image, is_lender, lender_grade, '
+      'response_rate, created_at';
 
   User? get currentUser => _client.auth.currentUser;
   Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
@@ -25,9 +32,7 @@ class AuthRepository {
     final now = DateTime.now();
     if (_lastOtpRequest != null &&
         now.difference(_lastOtpRequest!) < _otpCooldown) {
-      return Fail(OtpRateLimitFailure(
-        cooldownSeconds: _otpCooldown.inSeconds,
-      ));
+      return Fail(OtpRateLimitFailure(cooldownSeconds: _otpCooldown.inSeconds));
     }
     try {
       await _client.auth.signInWithOtp(phone: phone);
@@ -81,20 +86,44 @@ class AuthRepository {
 
   Future<Result<UserModel?>> getProfile(String userId) async {
     try {
-      final data = await _client
-          .from(DbTables.users)
-          .select()
-          .eq('id', userId)
-          .maybeSingle();
+      final isOwnProfile = currentUser?.id == userId;
+      final data = isOwnProfile
+          ? await _client
+                .from(DbTables.users)
+                .select(_ownProfileColumns)
+                .eq('id', userId)
+                .maybeSingle()
+          : await _client
+                .from(DbTables.publicUserProfiles)
+                .select(_publicProfileColumns)
+                .eq('id', userId)
+                .maybeSingle();
       if (data == null) return const Success(null);
-      return Success(UserModel.fromJson(data));
+      return Success(_profileFromJson(data, isPublic: !isOwnProfile));
     } catch (e) {
       return Fail(mapException(e));
     }
   }
 
-  Future<Result<UserModel>> createProfile(
-      Map<String, dynamic> profile) async {
+  UserModel _profileFromJson(
+    Map<String, dynamic> data, {
+    required bool isPublic,
+  }) {
+    if (!isPublic) return UserModel.fromJson(data);
+    return UserModel.fromJson({
+      'phone': '',
+      'identity_verified': false,
+      'fav_groups': const <String>[],
+      'country': '',
+      'region': null,
+      'locale': 'en',
+      'currency': 'USD',
+      'deleted_at': null,
+      ...data,
+    });
+  }
+
+  Future<Result<UserModel>> createProfile(Map<String, dynamic> profile) async {
     try {
       final data = await _client
           .from(DbTables.users)
@@ -108,7 +137,9 @@ class AuthRepository {
   }
 
   Future<Result<UserModel>> updateProfile(
-      String userId, Map<String, dynamic> updates) async {
+    String userId,
+    Map<String, dynamic> updates,
+  ) async {
     try {
       final data = await _client
           .from(DbTables.users)
@@ -124,9 +155,10 @@ class AuthRepository {
 
   Future<Result<void>> softDelete(String userId) async {
     try {
-      await _client.from(DbTables.users).update({
-        'deleted_at': DateTime.now().toIso8601String(),
-      }).eq('id', userId);
+      await _client
+          .from(DbTables.users)
+          .update({'deleted_at': DateTime.now().toIso8601String()})
+          .eq('id', userId);
       await _client.auth.signOut();
       return const Success(null);
     } catch (e) {

@@ -27,7 +27,7 @@ enum TransitionActor {
 /// Legal-transition table. Lookup: `_transitions[fromStatus]?[toStatus]`
 /// returns the set of actors authorised to perform that move.
 const Map<ReservationStatus, Map<ReservationStatus, Set<TransitionActor>>>
-    _transitions = {
+_transitions = {
   ReservationStatus.pending: {
     ReservationStatus.paid: {TransitionActor.system},
     ReservationStatus.cancelled: {
@@ -37,11 +37,7 @@ const Map<ReservationStatus, Map<ReservationStatus, Set<TransitionActor>>>
   },
   ReservationStatus.paid: {
     ReservationStatus.pickedUp: {TransitionActor.lender},
-    ReservationStatus.cancelled: {
-      TransitionActor.borrower,
-      TransitionActor.lender,
-      TransitionActor.system,
-    },
+    ReservationStatus.cancelled: {TransitionActor.system},
   },
   ReservationStatus.pickedUp: {
     ReservationStatus.returned: {TransitionActor.borrower},
@@ -51,17 +47,11 @@ const Map<ReservationStatus, Map<ReservationStatus, Set<TransitionActor>>>
     },
   },
   ReservationStatus.returned: {
-    ReservationStatus.settled: {
-      TransitionActor.lender,
-      TransitionActor.system,
-    },
+    ReservationStatus.settled: {TransitionActor.system},
     ReservationStatus.disputed: {TransitionActor.lender},
   },
   ReservationStatus.disputed: {
-    ReservationStatus.resolved: {
-      TransitionActor.admin,
-      TransitionActor.system,
-    },
+    ReservationStatus.resolved: {TransitionActor.admin, TransitionActor.system},
   },
   // settled / cancelled / resolved are terminal.
 };

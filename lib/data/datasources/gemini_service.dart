@@ -35,10 +35,10 @@ class GeminiService {
     required String supabaseAnonKey,
     String? accessToken,
     http.Client? httpClient,
-  })  : _functionUrl = '$supabaseUrl/functions/v1/gemini-analyze',
-        _supabaseAnonKey = supabaseAnonKey,
-        _accessToken = accessToken,
-        _httpClient = httpClient ?? http.Client();
+  }) : _functionUrl = '$supabaseUrl/functions/v1/gemini-analyze',
+       _supabaseAnonKey = supabaseAnonKey,
+       _accessToken = accessToken,
+       _httpClient = httpClient ?? http.Client();
 
   final String _functionUrl;
   final String _supabaseAnonKey;
@@ -50,7 +50,8 @@ class GeminiService {
   Future<Result<String>> analyzeItemPhoto(File imageFile) async {
     return _callEdgeFunction(
       imageFile: imageFile,
-      prompt: 'You are analyzing a K-pop concert rental item photo. '
+      prompt:
+          'You are analyzing a K-pop concert rental item photo. '
           'Identify the item and generate a concise tag string. '
           'Include: item type (lightstick/phone/camera/slogan/costume), '
           'brand/artist if identifiable, model/version if known, '
@@ -65,7 +66,8 @@ class GeminiService {
   Future<Result<String>> suggestCategory(File imageFile) async {
     final result = await _callEdgeFunction(
       imageFile: imageFile,
-      prompt: 'Look at this K-pop concert rental item photo. '
+      prompt:
+          'Look at this K-pop concert rental item photo. '
           'Classify it into exactly ONE of these categories: '
           'lightstick, phone, camera, slogan, costume, etc. '
           'Return ONLY the category name, nothing else.',
@@ -95,11 +97,13 @@ class GeminiService {
     try {
       final bytes = await imageFile.readAsBytes();
       if (bytes.length > _maxGeminiImageBytes) {
-        return Fail(ValidationFailure(
-          'Image too large for analysis '
-          '(${(bytes.length / 1024 / 1024).toStringAsFixed(1)}MB, '
-          'max ${_maxGeminiImageBytes ~/ 1024 ~/ 1024}MB)',
-        ));
+        return Fail(
+          ValidationFailure(
+            'Image too large for analysis '
+            '(${(bytes.length / 1024 / 1024).toStringAsFixed(1)}MB, '
+            'max ${_maxGeminiImageBytes ~/ 1024 ~/ 1024}MB)',
+          ),
+        );
       }
       final base64Image = base64Encode(bytes);
       final mimeType = _getMimeType(imageFile.path);
@@ -125,9 +129,9 @@ class GeminiService {
           .timeout(_geminiTimeout);
 
       if (response.statusCode != 200) {
-        return Fail(ServerFailure(
-          'Gemini analysis failed (${response.statusCode})',
-        ));
+        return Fail(
+          ServerFailure('Gemini analysis failed (${response.statusCode})'),
+        );
       }
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;

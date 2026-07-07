@@ -14,6 +14,9 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await CrashReporter.guard(() async {
+    Env.validateForRelease(isRelease: kReleaseMode);
+    await CrashReporter.init(dsn: Env.sentryDsn);
+
     await Supabase.initialize(
       url: Env.supabaseUrl,
       anonKey: Env.supabaseAnonKey,
@@ -45,18 +48,12 @@ void main() async {
         context: 'ErrorWidget',
       );
       if (!kReleaseMode) {
-        return ErrorWidget.withDetails(
-          message: details.exceptionAsString(),
-        );
+        return ErrorWidget.withDetails(message: details.exceptionAsString());
       }
       return const _ReleaseErrorFallback();
     };
 
-    runApp(
-      const ProviderScope(
-        child: DolpinApp(),
-      ),
-    );
+    runApp(const ProviderScope(child: DolpinApp()));
 
     // Initialize local notifications after runApp so it doesn't block
     // the first frame. Permission dialogs will show after the app is

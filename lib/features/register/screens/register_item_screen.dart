@@ -11,6 +11,7 @@ import '../../../data/datasources/storage_service.dart';
 import '../../../core/constants/enums.dart';
 import '../../../data/repositories/rental_repository.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/concert_provider.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/dolpin_button.dart';
 import '../widgets/condition_selector.dart';
@@ -20,8 +21,7 @@ class RegisterItemScreen extends ConsumerStatefulWidget {
   const RegisterItemScreen({super.key});
 
   @override
-  ConsumerState<RegisterItemScreen> createState() =>
-      _RegisterItemScreenState();
+  ConsumerState<RegisterItemScreen> createState() => _RegisterItemScreenState();
 }
 
 class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
@@ -29,9 +29,12 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
   final _descController = TextEditingController();
   final _priceController = TextEditingController();
   final _depositController = TextEditingController();
+  final _pickupLocationController = TextEditingController();
 
   ItemCategory _category = ItemCategory.lightstick;
   PickupMethod _pickupMethod = PickupMethod.direct;
+  DateTimeRange? _availabilityRange;
+  String? _selectedConcertId;
   String _conditionGrade = 'A';
   final _photos = <XFile>[];
   bool _isLoading = false;
@@ -44,7 +47,34 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
     _descController.dispose();
     _priceController.dispose();
     _depositController.dispose();
+    _pickupLocationController.dispose();
     super.dispose();
+  }
+
+  Future<void> _selectAvailability() async {
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(
+              context,
+            ).colorScheme.copyWith(primary: AppColors.primary),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (range != null) {
+      final end = range.end.isAfter(range.start)
+          ? range.end
+          : range.start.add(const Duration(days: 1));
+      setState(
+        () => _availabilityRange = DateTimeRange(start: range.start, end: end),
+      );
+    }
   }
 
   Future<void> _autoTag(XFile photo) async {
@@ -84,33 +114,38 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
   Future<void> _submit() async {
     final l = AppLocalizations.of(context)!;
     if (_photos.length < 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l.photosRequired)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l.photosRequired)));
       return;
     }
     final title = _titleController.text.trim();
     final priceText = _priceController.text.trim();
     final depositText = _depositController.text.trim();
-    if (title.isEmpty || priceText.isEmpty || depositText.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l.fillAllFields)),
-      );
+    if (title.isEmpty ||
+        priceText.isEmpty ||
+        depositText.isEmpty ||
+        _selectedConcertId == null ||
+        _availabilityRange == null ||
+        _pickupLocationController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l.fillAllFields)));
       return;
     }
 
     final price = int.tryParse(priceText);
     final deposit = int.tryParse(depositText);
     if (price == null || deposit == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l.validNumbers)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l.validNumbers)));
       return;
     }
     if (price <= 0 || deposit <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l.pricePositiveRequired)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l.pricePositiveRequired)));
       return;
     }
 
@@ -122,7 +157,9 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
       // Upload photos in parallel
       final storage = ref.read(storageServiceProvider);
       final uploadResults = await Future.wait(
-        _photos.map((photo) => storage.uploadItemPhoto(userId, File(photo.path))),
+        _photos.map(
+          (photo) => storage.uploadItemPhoto(userId, File(photo.path)),
+        ),
       );
 
       // Check for upload failures
@@ -143,17 +180,16 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
       String? vlmTag = _vlmTag;
       if (vlmTag == null && photoUrls.isNotEmpty) {
         final gemini = ref.read(geminiServiceProvider);
-        final tagResult =
-            await gemini.analyzeItemPhoto(File(_photos.first.path));
-        tagResult.when(
-          success: (tag) => vlmTag = tag,
-          failure: (_) {},
+        final tagResult = await gemini.analyzeItemPhoto(
+          File(_photos.first.path),
         );
+        tagResult.when(success: (tag) => vlmTag = tag, failure: (_) {});
       }
 
       // Create item
       final result = await ref.read(rentalRepositoryProvider).create({
         'lender_id': userId,
+        'concert_id': _selectedConcertId,
         'category': _category.name,
         'title': title,
         'description': _descController.text.trim(),
@@ -163,21 +199,30 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
         'deposit': deposit,
         'condition_grade': _conditionGrade,
         'pickup_method': _pickupMethod.name,
+        'pickup_location': {'label': _pickupLocationController.text.trim()},
+        'available_from': _availabilityRange!.start
+            .toIso8601String()
+            .split('T')
+            .first,
+        'available_to': _availabilityRange!.end
+            .toIso8601String()
+            .split('T')
+            .first,
         'vlm_tag': vlmTag,
       });
 
       if (!mounted) return;
       result.when(
         success: (_) => context.pop(),
-        failure: (f) => ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l.errorPrefix(f.message))),
-        ),
+        failure: (f) => ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l.errorPrefix(f.message)))),
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l.errorPrefix(e.toString()))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l.errorPrefix(e.toString()))));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -187,6 +232,7 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
+    final concertsAsync = ref.watch(upcomingConcertsProvider(null));
     final currencySymbol = CurrencyFormatter.symbol(
       ref.watch(currentUserProvider).value?.currency ?? 'KRW',
     );
@@ -254,8 +300,11 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
                 padding: const EdgeInsets.only(top: 8),
                 child: Row(
                   children: [
-                    const Icon(Icons.auto_awesome,
-                        size: 16, color: AppColors.primary),
+                    const Icon(
+                      Icons.auto_awesome,
+                      size: 16,
+                      color: AppColors.primary,
+                    ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
@@ -269,6 +318,30 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
                   ],
                 ),
               ),
+            const SizedBox(height: 24),
+            _sectionTitle(l.concert),
+            const SizedBox(height: 8),
+            concertsAsync.when(
+              data: (concerts) => DropdownButtonFormField<String>(
+                initialValue: _selectedConcertId,
+                decoration: InputDecoration(hintText: l.selectConcert),
+                items: concerts
+                    .map(
+                      (concert) => DropdownMenuItem(
+                        value: concert.id,
+                        child: Text('${concert.title} · ${concert.city}'),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) =>
+                    setState(() => _selectedConcertId = value),
+              ),
+              loading: () => const LinearProgressIndicator(),
+              error: (_, _) => Text(
+                l.couldNotLoadConcerts,
+                style: const TextStyle(color: AppColors.error),
+              ),
+            ),
             const SizedBox(height: 24),
             _sectionTitle(l.category),
             const SizedBox(height: 8),
@@ -288,9 +361,7 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
             const SizedBox(height: 8),
             TextField(
               controller: _titleController,
-              decoration: InputDecoration(
-                hintText: l.titleHint,
-              ),
+              decoration: InputDecoration(hintText: l.titleHint),
             ),
             const SizedBox(height: 24),
             _sectionTitle(l.description),
@@ -298,9 +369,7 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
             TextField(
               controller: _descController,
               maxLines: 3,
-              decoration: InputDecoration(
-                hintText: l.descriptionHint,
-              ),
+              decoration: InputDecoration(hintText: l.descriptionHint),
             ),
             const SizedBox(height: 24),
             _sectionTitle(l.condition),
@@ -346,6 +415,50 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 24),
+            _sectionTitle(l.availability),
+            const SizedBox(height: 8),
+            InkWell(
+              onTap: _selectAvailability,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.date_range, color: AppColors.primary),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _availabilityRange == null
+                            ? l.selectAvailability
+                            : DateFormatter.rentalPeriod(
+                                _availabilityRange!.start,
+                                _availabilityRange!.end,
+                              ),
+                        style: TextStyle(
+                          color: _availabilityRange == null
+                              ? AppColors.textHint
+                              : AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            _sectionTitle(l.pickupLocation),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _pickupLocationController,
+              decoration: InputDecoration(hintText: l.pickupLocationHint),
             ),
             const SizedBox(height: 24),
             _sectionTitle(l.pickupMethod),

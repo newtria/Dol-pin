@@ -9,8 +9,7 @@ import '../datasources/supabase_client.dart';
 import '../models/reservation_model.dart';
 import '../state/reservation_state_machine.dart';
 
-final reservationRepositoryProvider =
-    Provider<ReservationRepository>((ref) {
+final reservationRepositoryProvider = Provider<ReservationRepository>((ref) {
   return ReservationRepository(ref.watch(supabaseProvider));
 });
 
@@ -18,8 +17,60 @@ class ReservationRepository {
   ReservationRepository(this._client);
   final SupabaseClient _client;
 
+  Future<Result<ReservationModel>> createIntent({
+    required String itemId,
+    required DateTime rentalDate,
+    required DateTime returnDate,
+  }) async {
+    try {
+      final data = await _client.rpc(
+        DbFunctions.createReservationIntent,
+        params: {
+          'p_item_id': itemId,
+          'p_rental_date': rentalDate.toIso8601String().split('T').first,
+          'p_return_date': returnDate.toIso8601String().split('T').first,
+        },
+      );
+      return Success(
+        ReservationModel.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } catch (e) {
+      return Fail(mapException(e));
+    }
+  }
+
+  Future<Result<void>> startPaymentAttempt({
+    required String reservationId,
+    required String merchantUid,
+  }) async {
+    try {
+      final response = await _client.rpc(
+        DbFunctions.startReservationPaymentAttempt,
+        params: {
+          'p_reservation_id': reservationId,
+          'p_merchant_uid': merchantUid,
+        },
+      );
+      final row = response as Map<String, dynamic>?;
+      if (row == null) {
+        return const Fail(ServerFailure('Empty RPC response'));
+      }
+      if (row['ok'] != true) {
+        return Fail(
+          ValidationFailure(
+            row['error']?.toString() ?? 'Payment attempt rejected',
+          ),
+        );
+      }
+      return const Success(null);
+    } catch (e) {
+      return Fail(mapException(e));
+    }
+  }
+
   Future<Result<ReservationModel>> create(
-      Map<String, dynamic> reservation) async {
+    Map<String, dynamic> reservation,
+  ) async {
     try {
       final data = await _client
           .from(DbTables.reservations)
@@ -95,7 +146,7 @@ class ReservationRepository {
   }) async {
     try {
       final response = await _client.rpc(
-        'transition_reservation_status',
+        DbFunctions.transitionReservationStatus,
         params: {
           'p_reservation_id': reservationId,
           'p_target': target.value,
@@ -107,9 +158,9 @@ class ReservationRepository {
         return const Fail(ServerFailure('Empty RPC response'));
       }
       if (row['ok'] != true) {
-        return Fail(ValidationFailure(
-          row['error']?.toString() ?? 'Transition rejected',
-        ));
+        return Fail(
+          ValidationFailure(row['error']?.toString() ?? 'Transition rejected'),
+        );
       }
       return Success(ReservationStatus.fromString(row['status'] as String));
     } catch (e) {
@@ -123,30 +174,35 @@ class ReservationRepository {
       transition(reservationId: id, target: ReservationStatus.pickedUp);
 
   /// Borrower reports the item returned. The RPC stamps
-  /// `return_confirmed_at` server-side. The optional `returnPhoto`
-  /// upload happens as a SEPARATE direct UPDATE on the photo column
-  /// (the trigger only gates `status`).
+  /// `return_confirmed_at` and binds the uploaded return photo server-side.
   Future<Result<ReservationStatus>> confirmReturn(
     String id, {
     String? returnPhoto,
   }) async {
-    final result = await transition(
-      reservationId: id,
-      target: ReservationStatus.returned,
-    );
-    if (result.isFailure) return result;
-    if (returnPhoto != null) {
+    if (returnPhoto != null && returnPhoto.isNotEmpty) {
       try {
-        await _client
-            .from(DbTables.reservations)
-            .update({'return_photo': returnPhoto})
-            .eq('id', id);
-      } catch (_) {
-        // Photo is evidence the lender can also re-capture from their
-        // side; do not roll back the state on a photo-upload failure.
+        final response = await _client.rpc(
+          DbFunctions.confirmReservationReturn,
+          params: {'p_reservation_id': id, 'p_return_photo': returnPhoto},
+        );
+        final row = response as Map<String, dynamic>?;
+        if (row == null) {
+          return const Fail(ServerFailure('Empty RPC response'));
+        }
+        if (row['ok'] != true) {
+          return Fail(
+            ValidationFailure(
+              row['error']?.toString() ?? 'Return confirmation rejected',
+            ),
+          );
+        }
+        return Success(ReservationStatus.fromString(row['status'] as String));
+      } catch (e) {
+        return Fail(mapException(e));
       }
     }
-    return result;
+
+    return const Fail(ValidationFailure('Return photo is required'));
   }
 
   /// Cancellation entry point. The caller is responsible for invoking the
@@ -157,10 +213,7 @@ class ReservationRepository {
 
   /// Either party can raise a dispute. The platform freezes escrow until
   /// admin resolution; no money moves automatically.
-  Future<Result<ReservationStatus>> dispute(
-    String id, {
-    String? reason,
-  }) =>
+  Future<Result<ReservationStatus>> dispute(String id, {String? reason}) =>
       transition(
         reservationId: id,
         target: ReservationStatus.disputed,

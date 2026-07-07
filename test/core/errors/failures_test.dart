@@ -17,12 +17,16 @@ void main() {
     });
 
     test('maps PostgrestException to ServerFailure', () {
-      final failure = mapException(PostgrestException(message: 'db error', code: '500'));
+      final failure = mapException(
+        PostgrestException(message: 'db error', code: '500'),
+      );
       expect(failure, isA<ServerFailure>());
     });
 
     test('maps PostgrestException PGRST116 to NotFoundFailure', () {
-      final failure = mapException(PostgrestException(message: 'not found', code: 'PGRST116'));
+      final failure = mapException(
+        PostgrestException(message: 'not found', code: 'PGRST116'),
+      );
       expect(failure, isA<NotFoundFailure>());
     });
 

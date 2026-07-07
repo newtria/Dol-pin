@@ -163,6 +163,95 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reservationFailed => 'Reservation failed';
 
   @override
+  String paymentNotConfigured(Object currency) {
+    return '$currency payments are not configured yet';
+  }
+
+  @override
+  String get paymentVerificationPending => 'Payment was received. We could not confirm it yet, so this reservation is waiting for verification.';
+
+  @override
+  String get paymentVerificationFailed => 'Payment verification failed';
+
+  @override
+  String get chatWillBeAvailableAfterConfirmation => 'Reservation was created. Chat will be available from the reservation detail after confirmation.';
+
+  @override
+  String get reservationCancelled => 'Reservation cancelled';
+
+  @override
+  String get pickupConfirmed => 'Pickup confirmed';
+
+  @override
+  String get returnConfirmed => 'Return confirmed';
+
+  @override
+  String get reservationSettled => 'Reservation settled';
+
+  @override
+  String get reservationStatusPending => 'Pending';
+
+  @override
+  String get reservationStatusPaid => 'Paid';
+
+  @override
+  String get reservationStatusPickedUp => 'Picked up';
+
+  @override
+  String get reservationStatusReturned => 'Returned';
+
+  @override
+  String get reservationStatusSettled => 'Settled';
+
+  @override
+  String get reservationStatusCancelled => 'Cancelled';
+
+  @override
+  String get reservationStatusDisputed => 'Disputed';
+
+  @override
+  String get reservationStatusResolved => 'Resolved';
+
+  @override
+  String get disputeOpened => 'Dispute opened';
+
+  @override
+  String get confirmPickup => 'Confirm pickup';
+
+  @override
+  String get cancelAndRefund => 'Cancel and refund';
+
+  @override
+  String get confirmReturn => 'Confirm return';
+
+  @override
+  String get settleDeposit => 'Settle deposit';
+
+  @override
+  String get confirmRefundMessage => 'This will cancel the reservation and request a refund. Continue?';
+
+  @override
+  String get confirmSettlementMessage => 'This will refund the deposit and close the reservation. Continue?';
+
+  @override
+  String get openDispute => 'Open dispute';
+
+  @override
+  String get openChat => 'Open chat';
+
+  @override
+  String get reservationId => 'Reservation ID';
+
+  @override
+  String get paymentId => 'Payment ID';
+
+  @override
+  String get disputeReason => 'Dispute reason';
+
+  @override
+  String get describeIssue => 'Describe the issue';
+
+  @override
   String get bookNow => 'Book Now';
 
   @override
@@ -204,6 +293,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get registerItem => 'Register Item';
 
   @override
+  String get concert => 'Concert';
+
+  @override
+  String get selectConcert => 'Select concert';
+
+  @override
   String get category => 'Category';
 
   @override
@@ -228,6 +323,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pickupMethod => 'Pickup Method';
+
+  @override
+  String get availability => 'Availability';
+
+  @override
+  String get selectAvailability => 'Select availability';
+
+  @override
+  String get pickupLocation => 'Pickup location';
+
+  @override
+  String get pickupLocationHint => 'e.g., KSPO Dome Gate 2';
 
   @override
   String get register => 'Register';

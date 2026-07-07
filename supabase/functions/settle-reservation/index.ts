@@ -17,10 +17,11 @@
 //      the return condition.
 //   2. Caller sends `{reservation_id}`.
 //   3. We load the reservation, verify status='returned' and caller=lender.
-//   4. We call PortOne `/payments/cancel` for the `deposit` amount only.
-//   5. We call `transition_reservation_status` RPC to advance returned →
+//   4. We mark the reservation `settle_pending` to block dispute races.
+//   5. We call PortOne `/payments/cancel` for the `deposit` amount only.
+//   6. We call `transition_reservation_status` RPC to advance returned →
 //      settled.
-//   6. If the RPC fails after PortOne succeeded, we return 500 with the
+//   7. If the RPC fails after PortOne succeeded, we return 500 with the
 //      imp_uid so Ops can reconcile manually (matches the refund-payment
 //      divergence handling).
 
@@ -97,6 +98,40 @@ async function portOneCancel(
   }
 }
 
+interface PortOnePayment {
+  imp_uid: string
+  amount: number
+  cancel_amount?: number
+  status: string
+  currency?: string
+}
+
+async function fetchPortOnePayment(
+  impUid: string,
+  token: string,
+): Promise<PortOnePayment> {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), PORTONE_TIMEOUT_MS)
+  try {
+    const res = await fetch(
+      `${PORTONE_API}/payments/${encodeURIComponent(impUid)}`,
+      {
+        method: 'GET',
+        headers: { Authorization: token },
+        signal: ctrl.signal,
+      },
+    )
+    if (!res.ok) throw new Error(`PortOne payment HTTP ${res.status}`)
+    const data = await res.json()
+    if (data.code !== 0) {
+      throw new Error(`PortOne payment: ${data.message ?? 'unknown'}`)
+    }
+    return data.response as PortOnePayment
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Request handler
 // ---------------------------------------------------------------------------
@@ -161,7 +196,7 @@ Deno.serve(async (req) => {
     const { data: reservation, error: resError } = await adminClient
       .from('reservations')
       .select(
-        'id, borrower_id, lender_id, deposit, total_paid, status, payment_id',
+        'id, borrower_id, lender_id, deposit, total_paid, currency, status, payment_id, payment_action, payment_action_started_at',
       )
       .eq('id', reservationId)
       .maybeSingle()
@@ -176,6 +211,15 @@ Deno.serve(async (req) => {
     if (reservation.lender_id !== callerId) {
       return jsonResponse(403, { error: 'Only the lender may settle' })
     }
+    if (reservation.status === 'settled') {
+      return jsonResponse(200, {
+        reservation_id: reservation.id,
+        imp_uid: reservation.payment_id,
+        refunded_amount: reservation.deposit,
+        lender_payout_pending: reservation.total_paid - reservation.deposit,
+        status: 'settled',
+      })
+    }
     if (reservation.status !== 'returned') {
       return jsonResponse(409, {
         error: `Cannot settle a reservation in status '${reservation.status}'`,
@@ -186,22 +230,116 @@ Deno.serve(async (req) => {
       // stamped — but guard anyway.
       return jsonResponse(409, { error: 'Reservation has no payment_id' })
     }
-    if (reservation.deposit <= 0) {
-      return jsonResponse(409, { error: 'Reservation has no deposit to refund' })
+    if (reservation.deposit < 0) {
+      return jsonResponse(409, { error: 'Reservation deposit is invalid' })
     }
 
-    // Refund the deposit portion via PortOne partial cancel.
-    let cancelled: { cancel_amount: number; status: string }
-    try {
-      const token = await getPortOneAccessToken()
-      cancelled = await portOneCancel(token, {
-        imp_uid: reservation.payment_id,
-        amount: reservation.deposit,
-        reason: `Deposit refund — reservation ${reservation.id} settled`,
+    if (reservation.payment_action === 'settle_pending') {
+      const actionStartedAt = reservation.payment_action_started_at
+        ? Date.parse(reservation.payment_action_started_at)
+        : 0
+      const actionIsStale =
+        actionStartedAt === 0 || Date.now() - actionStartedAt > 10 * 60_000
+
+      if (reservation.deposit === 0 && actionIsStale) {
+        await adminClient.rpc('clear_reservation_payment_action', {
+          p_reservation_id: reservation.id,
+          p_action: 'settle_pending',
+        })
+      } else if (reservation.deposit === 0) {
+        return jsonResponse(409, { error: 'Settlement already in progress' })
+      } else {
+      let payment: PortOnePayment
+      try {
+        const token = await getPortOneAccessToken()
+        payment = await fetchPortOnePayment(reservation.payment_id, token)
+      } catch (e) {
+        console.error('PortOne lookup failed during settlement retry', e)
+        return jsonResponse(502, { error: 'PortOne lookup failed' })
+      }
+
+      if (payment.currency && payment.currency !== reservation.currency) {
+        return jsonResponse(409, { error: 'Currency mismatch' })
+      }
+
+      const refundedAmount = payment.cancel_amount ?? 0
+      if (refundedAmount < reservation.deposit) {
+        if (actionIsStale) {
+          await adminClient.rpc('clear_reservation_payment_action', {
+            p_reservation_id: reservation.id,
+            p_action: 'settle_pending',
+          })
+        } else {
+        return jsonResponse(409, { error: 'Settlement already in progress' })
+        }
+      } else {
+        const { data: retryTxResult, error: retryTxError } =
+          await adminClient.rpc('transition_reservation_status', {
+            p_reservation_id: reservation.id,
+            p_target: 'settled',
+            p_actor_kind: 'system',
+          })
+        if (retryTxError || retryTxResult?.ok !== true) {
+          console.error('settlement retry transition failed', {
+            retryTxError,
+            retryTxResult,
+            reservationId: reservation.id,
+          })
+          return jsonResponse(500, {
+            error:
+              'Deposit already refunded at PortOne but state transition failed. Contact support.',
+            imp_uid: reservation.payment_id,
+          })
+        }
+
+        return jsonResponse(200, {
+          reservation_id: reservation.id,
+          imp_uid: reservation.payment_id,
+          refunded_amount: refundedAmount,
+          lender_payout_pending: reservation.total_paid - reservation.deposit,
+          status: 'settled',
+        })
+      }
+      }
+    }
+
+    const { data: beginResult, error: beginError } = await adminClient.rpc(
+      'begin_reservation_payment_action',
+      {
+        p_reservation_id: reservation.id,
+        p_action: 'settle_pending',
+        p_payment_id: reservation.payment_id,
+        p_actor_id: callerId,
+      },
+    )
+    if (beginError || beginResult?.ok !== true) {
+      console.error('begin settlement failed', { beginError, beginResult })
+      return jsonResponse(409, {
+        error: beginResult?.error ?? 'Could not start settlement',
       })
-    } catch (e) {
-      console.error('PortOne cancel failed', e)
-      return jsonResponse(502, { error: 'PortOne cancel failed' })
+    }
+
+    // Refund the deposit portion via PortOne partial cancel. If the item had
+    // no deposit, no external money movement is needed; the DB transition is
+    // still protected by the same settle_pending lock.
+    let cancelled: { cancel_amount: number; status: string }
+    if (reservation.deposit === 0) {
+      cancelled = { cancel_amount: 0, status: 'settled' }
+    } else {
+      try {
+        const token = await getPortOneAccessToken()
+        cancelled = await portOneCancel(token, {
+          imp_uid: reservation.payment_id,
+          amount: reservation.deposit,
+          reason: `Deposit refund — reservation ${reservation.id} settled`,
+        })
+      } catch (e) {
+        console.error('PortOne cancel failed', e)
+        return jsonResponse(502, {
+          error:
+            'PortOne cancel status is unknown. Retry will reconcile provider state before another cancel.',
+        })
+      }
     }
 
     // Advance state via the RPC. If this fails AFTER PortOne refunded

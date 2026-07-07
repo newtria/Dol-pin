@@ -62,7 +62,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     result.when(
       success: (_) => context.go('/'),
       failure: (f) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.errorPrefix(f.message))),
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.errorPrefix(f.message)),
+        ),
       ),
     );
     setState(() => _isLoading = false);
@@ -110,20 +112,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               ),
             ),
             const SizedBox(height: 32),
-            Text(
-              l.nickname,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text(l.nickname, style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             TextField(
               controller: _nicknameController,
               decoration: InputDecoration(hintText: l.enterNickname),
             ),
             const SizedBox(height: 24),
-            Text(
-              l.country,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text(l.country, style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -145,9 +141,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             const SizedBox(height: 8),
             TextField(
               controller: _groupController,
-              decoration: InputDecoration(
-                hintText: l.typeAndEnter,
-              ),
+              decoration: InputDecoration(hintText: l.typeAndEnter),
               onSubmitted: (value) {
                 if (value.trim().isNotEmpty) {
                   setState(() {

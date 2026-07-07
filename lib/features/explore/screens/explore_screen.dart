@@ -12,7 +12,9 @@ import '../widgets/category_chips.dart';
 import '../widgets/rental_item_card.dart';
 
 class ExploreScreen extends ConsumerStatefulWidget {
-  const ExploreScreen({super.key});
+  const ExploreScreen({super.key, this.concertId});
+
+  final String? concertId;
 
   @override
   ConsumerState<ExploreScreen> createState() => _ExploreScreenState();
@@ -40,14 +42,20 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   }
 
   void _onScroll() {
-    if (_selectedCategory == null) return;
+    final filter = _currentFilter;
     final maxScroll = _scrollController.position.maxScrollExtent;
     final currentScroll = _scrollController.position.pixels;
     if (currentScroll >= maxScroll - 200) {
-      ref
-          .read(paginatedRentalsByCategoryProvider(_selectedCategory!).notifier)
-          .loadMore();
+      ref.read(paginatedRentalsFilterProvider(filter).notifier).loadMore();
     }
+  }
+
+  RentalFilter get _currentFilter {
+    return RentalFilter(
+      concertId: widget.concertId,
+      category: _selectedCategory,
+      searchQuery: _searchQuery,
+    );
   }
 
   void _onSearch(String query) {
@@ -61,19 +69,14 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     }
     setState(() {
       _searchQuery = sanitized;
-      _selectedCategory = null;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
-    final searchAsync = _searchQuery != null
-        ? ref.watch(rentalSearchProvider(_searchQuery!))
-        : null;
-    final itemsAsync = _selectedCategory != null
-        ? ref.watch(paginatedRentalsByCategoryProvider(_selectedCategory!))
-        : null;
+    final filter = _currentFilter;
+    final itemsAsync = ref.watch(paginatedRentalsFilterProvider(filter));
 
     return SafeArea(
       child: Column(
@@ -110,120 +113,57 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
             onSelected: (category) {
               setState(() {
                 _selectedCategory = category;
-                _searchQuery = null;
-                _searchController.clear();
               });
             },
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: searchAsync != null
-                ? searchAsync.when(
-                    data: (items) {
-                      if (items.isEmpty) {
-                        return Center(
-                          child: Text(
-                            l.noItemsInCategory,
-                            style: const TextStyle(
-                                color: AppColors.textSecondary),
-                          ),
-                        );
-                      }
-                      return GridView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          childAspectRatio: 0.65,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                        ),
-                        itemCount: items.length,
-                        itemBuilder: (context, index) {
-                          final item = items[index];
-                          return RentalItemCard(
-                            item: item,
-                            onTap: () => context.pushNamed(
-                              'itemDetail',
-                              pathParameters: {'id': item.id},
-                            ),
-                          );
-                        },
-                      );
-                    },
-                    loading: () => const LoadingIndicator(),
-                    error: (e, _) => ErrorView(
-                      message: l.couldNotLoadItems,
-                      onRetry: () => ref
-                          .invalidate(rentalSearchProvider(_searchQuery!)),
+            child: itemsAsync.when(
+              data: (paginatedState) {
+                final items = paginatedState.items;
+                if (items.isEmpty) {
+                  return Center(
+                    child: Text(
+                      l.noItemsInCategory,
+                      style: const TextStyle(color: AppColors.textSecondary),
                     ),
-                  )
-                : _selectedCategory == null
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.search,
-                            size: 64, color: AppColors.textHint),
-                        const SizedBox(height: 12),
-                        Text(
-                          l.selectCategoryOrSearch,
-                          textAlign: TextAlign.center,
-                          style:
-                              const TextStyle(color: AppColors.textSecondary),
-                        ),
-                      ],
-                    ),
-                  )
-                : itemsAsync!.when(
-                    data: (paginatedState) {
-                      final items = paginatedState.items;
-                      if (items.isEmpty) {
-                        return Center(
-                          child: Text(
-                            l.noItemsInCategory,
-                            style: const TextStyle(
-                                color: AppColors.textSecondary),
-                          ),
-                        );
-                      }
-                      // Total count: items + optional loading indicator
-                      final itemCount = items.length +
-                          (paginatedState.isLoadingMore ? 1 : 0);
-                      return GridView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          childAspectRatio: 0.65,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                        ),
-                        itemCount: itemCount,
-                        itemBuilder: (context, index) {
-                          if (index >= items.length) {
-                            return const LoadMoreIndicator();
-                          }
-                          final item = items[index];
-                          return RentalItemCard(
-                            item: item,
-                            onTap: () => context.pushNamed(
-                              'itemDetail',
-                              pathParameters: {'id': item.id},
-                            ),
-                          );
-                        },
-                      );
-                    },
-                    loading: () => const LoadingIndicator(),
-                    error: (e, _) => ErrorView(
-                      message: l.couldNotLoadItems,
-                      onRetry: () => ref.invalidate(
-                          paginatedRentalsByCategoryProvider(
-                              _selectedCategory!)),
-                    ),
+                  );
+                }
+                // Total count: items + optional loading indicator
+                final itemCount =
+                    items.length + (paginatedState.isLoadingMore ? 1 : 0);
+                return GridView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.65,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
                   ),
+                  itemCount: itemCount,
+                  itemBuilder: (context, index) {
+                    if (index >= items.length) {
+                      return const LoadMoreIndicator();
+                    }
+                    final item = items[index];
+                    return RentalItemCard(
+                      item: item,
+                      onTap: () => context.pushNamed(
+                        'itemDetail',
+                        pathParameters: {'id': item.id},
+                      ),
+                    );
+                  },
+                );
+              },
+              loading: () => const LoadingIndicator(),
+              error: (e, _) => ErrorView(
+                message: l.couldNotLoadItems,
+                onRetry: () =>
+                    ref.invalidate(paginatedRentalsFilterProvider(filter)),
+              ),
+            ),
           ),
         ],
       ),

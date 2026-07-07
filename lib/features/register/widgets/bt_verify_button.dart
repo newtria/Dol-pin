@@ -5,10 +5,7 @@ import '../../../data/datasources/bluetooth_service.dart';
 import '../../../l10n/app_localizations.dart';
 
 class BtVerifyButton extends ConsumerStatefulWidget {
-  const BtVerifyButton({
-    super.key,
-    required this.onVerified,
-  });
+  const BtVerifyButton({super.key, required this.onVerified});
 
   final void Function(LightstickInfo info) onVerified;
 
@@ -39,9 +36,9 @@ class _BtVerifyButtonState extends ConsumerState<BtVerifyButton> {
     final available = await btService.isAvailable();
 
     if (!available && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l.bluetoothNotAvailable)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l.bluetoothNotAvailable)));
       setState(() => _isScanning = false);
       return;
     }
@@ -54,9 +51,9 @@ class _BtVerifyButtonState extends ConsumerState<BtVerifyButton> {
     result.when(
       success: (devices) {
         if (devices.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l.noLightsticksFound)),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(l.noLightsticksFound)));
           return;
         }
         // Show picker if multiple devices
@@ -67,9 +64,9 @@ class _BtVerifyButtonState extends ConsumerState<BtVerifyButton> {
         }
       },
       failure: (f) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(f.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(f.message)));
       },
     );
   }
@@ -86,7 +83,10 @@ class _BtVerifyButtonState extends ConsumerState<BtVerifyButton> {
               padding: const EdgeInsets.all(16),
               child: Text(
                 AppLocalizations.of(context)!.selectYourLightstick,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             for (final device in devices)
@@ -124,9 +124,11 @@ class _BtVerifyButtonState extends ConsumerState<BtVerifyButton> {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           : const Icon(Icons.bluetooth, size: 18),
-      label: Text(_isScanning
-          ? AppLocalizations.of(context)!.scanning
-          : AppLocalizations.of(context)!.verifyLightstick),
+      label: Text(
+        _isScanning
+            ? AppLocalizations.of(context)!.scanning
+            : AppLocalizations.of(context)!.verifyLightstick,
+      ),
       style: OutlinedButton.styleFrom(
         foregroundColor: AppColors.verified,
         side: const BorderSide(color: AppColors.verified),

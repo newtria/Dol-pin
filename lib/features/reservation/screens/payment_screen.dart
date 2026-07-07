@@ -28,10 +28,7 @@ class PaymentScreen extends StatelessWidget {
           children: [
             const CircularProgressIndicator(color: AppColors.primary),
             const SizedBox(height: 16),
-            Text(
-              l.proceedToPayment,
-              style: const TextStyle(fontSize: 16),
-            ),
+            Text(l.proceedToPayment, style: const TextStyle(fontSize: 16)),
           ],
         ),
       ),
@@ -45,7 +42,7 @@ class PaymentScreen extends StatelessWidget {
         buyerName: params.buyerName,
         buyerTel: params.buyerTel,
         buyerEmail: params.buyerEmail,
-        appScheme: 'com.dolpin.app',
+        appScheme: 'dolpin',
       ),
       callback: (Map<String, String> result) {
         Navigator.pop(

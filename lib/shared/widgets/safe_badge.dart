@@ -3,11 +3,7 @@ import '../../core/constants/app_colors.dart';
 import '../../l10n/app_localizations.dart';
 
 class SafeBadge extends StatelessWidget {
-  const SafeBadge({
-    super.key,
-    this.label,
-    this.compact = false,
-  });
+  const SafeBadge({super.key, this.label, this.compact = false});
 
   final String? label;
   final bool compact;

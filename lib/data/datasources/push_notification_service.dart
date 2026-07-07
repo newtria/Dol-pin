@@ -32,8 +32,9 @@ class NotificationChannels {
 /// so a single instance is reused across all callers.
 final _plugin = FlutterLocalNotificationsPlugin();
 
-final pushNotificationServiceProvider =
-    Provider<PushNotificationService>((ref) {
+final pushNotificationServiceProvider = Provider<PushNotificationService>((
+  ref,
+) {
   return PushNotificationService(ref.watch(supabaseProvider));
 });
 
@@ -47,8 +48,9 @@ class PushNotificationService {
   /// Safe to call multiple times (subsequent calls are no-ops at the
   /// platform channel level).
   static Future<void> initPlugin() async {
-    const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
 
     const darwinSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
@@ -69,9 +71,10 @@ class PushNotificationService {
 
     // Create Android notification channels.
     if (Platform.isAndroid) {
-      final androidPlugin =
-          _plugin.resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
+      final androidPlugin = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       if (androidPlugin != null) {
         await Future.wait([
           androidPlugin.createNotificationChannel(
@@ -98,7 +101,8 @@ class PushNotificationService {
     if (Platform.isIOS || Platform.isMacOS) {
       await _plugin
           .resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>()
+            IOSFlutterLocalNotificationsPlugin
+          >()
           ?.requestPermissions(alert: true, badge: true, sound: true);
     }
 
@@ -106,7 +110,8 @@ class PushNotificationService {
     if (Platform.isAndroid) {
       await _plugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
+            AndroidFlutterLocalNotificationsPlugin
+          >()
           ?.requestNotificationsPermission();
     }
   }
@@ -178,16 +183,18 @@ class PushNotificationService {
 
   /// Stores FCM token in user's profile for server-side push.
   Future<void> registerToken(String userId, String fcmToken) async {
-    await _client.from(DbTables.users).update({
-      'fcm_token': fcmToken,
-    }).eq('id', userId);
+    await _client
+        .from(DbTables.users)
+        .update({'fcm_token': fcmToken})
+        .eq('id', userId);
   }
 
   /// Removes FCM token on sign out.
   Future<void> unregisterToken(String userId) async {
-    await _client.from(DbTables.users).update({
-      'fcm_token': null,
-    }).eq('id', userId);
+    await _client
+        .from(DbTables.users)
+        .update({'fcm_token': null})
+        .eq('id', userId);
   }
 
   /// Callback when user taps a notification.

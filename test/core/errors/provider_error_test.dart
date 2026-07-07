@@ -4,21 +4,21 @@ import 'package:dolpin/core/errors/result.dart';
 
 void main() {
   group('Provider error pattern', () {
-    test('Failure objects can be thrown and caught with type info preserved', () {
-      const failure = NetworkFailure('No connection');
-      final result = Fail<String>(failure);
+    test(
+      'Failure objects can be thrown and caught with type info preserved',
+      () {
+        const failure = NetworkFailure('No connection');
+        final result = Fail<String>(failure);
 
-      try {
-        result.when(
-          success: (data) => data,
-          failure: (f) => throw f,
-        );
-        fail('Should have thrown');
-      } catch (e) {
-        expect(e, isA<NetworkFailure>());
-        expect((e as Failure).message, 'No connection');
-      }
-    });
+        try {
+          result.when(success: (data) => data, failure: (f) => throw f);
+          fail('Should have thrown');
+        } catch (e) {
+          expect(e, isA<NetworkFailure>());
+          expect((e as Failure).message, 'No connection');
+        }
+      },
+    );
 
     test('Failure type is preserved through throw', () {
       final failures = <Failure>[
@@ -32,10 +32,7 @@ void main() {
       for (final failure in failures) {
         final result = Fail<int>(failure);
         try {
-          result.when(
-            success: (data) => data,
-            failure: (f) => throw f,
-          );
+          result.when(success: (data) => data, failure: (f) => throw f);
         } catch (e) {
           expect(e.runtimeType, failure.runtimeType);
           expect((e as Failure).message, failure.message);
@@ -51,5 +48,14 @@ void main() {
       );
       expect(value, 42);
     });
+
+    test(
+      'Failure string keeps type and message for provider error surfaces',
+      () {
+        const failure = ServerFailure('edge function failed');
+
+        expect(failure.toString(), 'ServerFailure: edge function failed');
+      },
+    );
   });
 }

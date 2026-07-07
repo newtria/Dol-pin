@@ -37,17 +37,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final maxScroll = _scrollController.position.maxScrollExtent;
     final currentScroll = _scrollController.position.pixels;
     if (currentScroll >= maxScroll - 200) {
-      ref
-          .read(paginatedUpcomingConcertsProvider(null).notifier)
-          .loadMore();
+      ref.read(paginatedUpcomingConcertsProvider(null).notifier).loadMore();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
-    final concertsAsync =
-        ref.watch(paginatedUpcomingConcertsProvider(null));
+    final concertsAsync = ref.watch(paginatedUpcomingConcertsProvider(null));
 
     return SafeArea(
       child: CustomScrollView(
@@ -58,17 +55,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             title: Text(
               l.appTitle,
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w900,
-                  ),
+                color: AppColors.primary,
+                fontWeight: FontWeight.w900,
+              ),
             ),
             actions: [
               IconButton(
                 icon: const Icon(Icons.notifications_outlined),
                 onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(l.comingSoon)),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(l.comingSoon)));
                 },
               ),
             ],
@@ -79,7 +76,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               child: Text(
                 l.upcomingConcerts,
                 style: const TextStyle(
-                    fontSize: 20, fontWeight: FontWeight.bold),
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
@@ -94,8 +93,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       child: Text(
                         l.noUpcomingConcerts,
                         textAlign: TextAlign.center,
-                        style:
-                            const TextStyle(color: AppColors.textSecondary),
+                        style: const TextStyle(color: AppColors.textSecondary),
                       ),
                     ),
                   ),
@@ -110,7 +108,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     final concert = concerts[index];
                     return Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 6),
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
                       child: ConcertCard(
                         concert: concert,
                         onTap: () => context.pushNamed(
@@ -120,18 +120,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     );
                   },
-                  childCount: concerts.length +
-                      (paginatedState.isLoadingMore ? 1 : 0),
+                  childCount:
+                      concerts.length + (paginatedState.isLoadingMore ? 1 : 0),
                 ),
               );
             },
-            loading: () =>
-                const SliverToBoxAdapter(child: LoadingIndicator()),
+            loading: () => const SliverToBoxAdapter(child: LoadingIndicator()),
             error: (e, _) => SliverToBoxAdapter(
               child: ErrorView(
                 message: l.couldNotLoadConcerts,
-                onRetry: () => ref.invalidate(
-                    paginatedUpcomingConcertsProvider(null)),
+                onRetry: () =>
+                    ref.invalidate(paginatedUpcomingConcertsProvider(null)),
               ),
             ),
           ),

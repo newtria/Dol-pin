@@ -31,7 +31,11 @@ class ProfileScreen extends ConsumerWidget {
                     ? CachedNetworkImageProvider(user!.profileImage!)
                     : null,
                 child: user?.profileImage == null
-                    ? const Icon(Icons.person, size: 48, color: AppColors.textHint)
+                    ? const Icon(
+                        Icons.person,
+                        size: 48,
+                        color: AppColors.textHint,
+                      )
                     : null,
               ),
               const SizedBox(height: 12),
@@ -63,9 +67,9 @@ class ProfileScreen extends ConsumerWidget {
               _ProfileMenuItem(
                 icon: Icons.star_outline,
                 label: l.reviews,
-                onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(l.comingSoon)),
-                ),
+                onTap: () => ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(l.comingSoon))),
               ),
               const Divider(color: AppColors.divider, height: 32),
               _ProfileMenuItem(
@@ -76,16 +80,16 @@ class ProfileScreen extends ConsumerWidget {
               _ProfileMenuItem(
                 icon: Icons.help_outline,
                 label: l.help,
-                onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(l.comingSoon)),
-                ),
+                onTap: () => ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(l.comingSoon))),
               ),
               _ProfileMenuItem(
                 icon: Icons.policy_outlined,
                 label: l.privacy,
-                onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(l.comingSoon)),
-                ),
+                onTap: () => ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(l.comingSoon))),
               ),
               const Divider(color: AppColors.divider, height: 32),
               _ProfileMenuItem(

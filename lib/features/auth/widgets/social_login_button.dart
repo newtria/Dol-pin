@@ -17,14 +17,8 @@ class SocialLoginButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (icon, bgColor) = switch (provider) {
-      SocialProvider.apple => (
-          Icons.apple,
-          Colors.white,
-        ),
-      SocialProvider.google => (
-          Icons.g_mobiledata,
-          AppColors.surfaceLight,
-        ),
+      SocialProvider.apple => (Icons.apple, Colors.white),
+      SocialProvider.google => (Icons.g_mobiledata, AppColors.surfaceLight),
     };
 
     final label = switch (provider) {

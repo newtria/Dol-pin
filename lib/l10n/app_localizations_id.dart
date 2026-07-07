@@ -163,6 +163,95 @@ class AppLocalizationsId extends AppLocalizations {
   String get reservationFailed => 'Reservasi gagal';
 
   @override
+  String paymentNotConfigured(Object currency) {
+    return 'Pembayaran $currency belum dikonfigurasi';
+  }
+
+  @override
+  String get paymentVerificationPending => 'Pembayaran telah diterima. Kami belum dapat mengonfirmasinya, jadi reservasi ini menunggu verifikasi.';
+
+  @override
+  String get paymentVerificationFailed => 'Verifikasi pembayaran gagal';
+
+  @override
+  String get chatWillBeAvailableAfterConfirmation => 'Reservasi dibuat. Chat akan tersedia dari detail reservasi setelah dikonfirmasi.';
+
+  @override
+  String get reservationCancelled => 'Reservasi dibatalkan';
+
+  @override
+  String get pickupConfirmed => 'Pengambilan dikonfirmasi';
+
+  @override
+  String get returnConfirmed => 'Pengembalian dikonfirmasi';
+
+  @override
+  String get reservationSettled => 'Reservasi diselesaikan';
+
+  @override
+  String get reservationStatusPending => 'Menunggu';
+
+  @override
+  String get reservationStatusPaid => 'Dibayar';
+
+  @override
+  String get reservationStatusPickedUp => 'Diambil';
+
+  @override
+  String get reservationStatusReturned => 'Dikembalikan';
+
+  @override
+  String get reservationStatusSettled => 'Diselesaikan';
+
+  @override
+  String get reservationStatusCancelled => 'Dibatalkan';
+
+  @override
+  String get reservationStatusDisputed => 'Dalam sengketa';
+
+  @override
+  String get reservationStatusResolved => 'Diselesaikan';
+
+  @override
+  String get disputeOpened => 'Sengketa dibuka';
+
+  @override
+  String get confirmPickup => 'Konfirmasi pengambilan';
+
+  @override
+  String get cancelAndRefund => 'Batalkan dan refund';
+
+  @override
+  String get confirmReturn => 'Konfirmasi pengembalian';
+
+  @override
+  String get settleDeposit => 'Selesaikan deposit';
+
+  @override
+  String get confirmRefundMessage => 'Reservasi akan dibatalkan dan refund diminta. Lanjutkan?';
+
+  @override
+  String get confirmSettlementMessage => 'Deposit akan dikembalikan dan reservasi ditutup. Lanjutkan?';
+
+  @override
+  String get openDispute => 'Buka sengketa';
+
+  @override
+  String get openChat => 'Buka chat';
+
+  @override
+  String get reservationId => 'ID reservasi';
+
+  @override
+  String get paymentId => 'ID pembayaran';
+
+  @override
+  String get disputeReason => 'Alasan sengketa';
+
+  @override
+  String get describeIssue => 'Jelaskan masalahnya';
+
+  @override
   String get bookNow => 'Pesan Sekarang';
 
   @override
@@ -198,6 +287,12 @@ class AppLocalizationsId extends AppLocalizations {
   String get registerItem => 'Daftarkan Item';
 
   @override
+  String get concert => 'Konser';
+
+  @override
+  String get selectConcert => 'Pilih konser';
+
+  @override
   String get category => 'Kategori';
 
   @override
@@ -222,6 +317,18 @@ class AppLocalizationsId extends AppLocalizations {
 
   @override
   String get pickupMethod => 'Metode Pengambilan';
+
+  @override
+  String get availability => 'Ketersediaan';
+
+  @override
+  String get selectAvailability => 'Pilih ketersediaan';
+
+  @override
+  String get pickupLocation => 'Lokasi pengambilan';
+
+  @override
+  String get pickupLocationHint => 'contoh: Gerbang 2 KSPO Dome';
 
   @override
   String get register => 'Daftar';

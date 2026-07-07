@@ -6,12 +6,15 @@ class CurrencyFormatter {
   static final _formatCache = <String, NumberFormat>{};
 
   static NumberFormat _getFormat(String currency) {
-    return _formatCache.putIfAbsent(currency, () => switch (currency) {
-      'KRW' => NumberFormat('#,###', 'ko'),
-      'IDR' => NumberFormat('#,###', 'id'),
-      'JPY' => NumberFormat('#,###', 'ja'),
-      _ => NumberFormat('#,##0.00', 'en'),
-    });
+    return _formatCache.putIfAbsent(
+      currency,
+      () => switch (currency) {
+        'KRW' => NumberFormat('#,###', 'ko'),
+        'IDR' => NumberFormat('#,###', 'id'),
+        'JPY' => NumberFormat('#,###', 'ja'),
+        _ => NumberFormat('#,##0.00', 'en'),
+      },
+    );
   }
 
   static String symbol(String currency) => switch (currency) {

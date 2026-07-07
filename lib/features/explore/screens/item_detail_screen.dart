@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/enums.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/share_helper.dart';
 import '../../../l10n/app_localizations.dart';
@@ -67,7 +68,9 @@ class _ItemDetailBodyState extends ConsumerState<_ItemDetailBody> {
 
     final result = await ReportDialog.show(context, widget.item.title);
     if (result != null && mounted) {
-      final res = await ref.read(reportRepositoryProvider).submitReport(
+      final res = await ref
+          .read(reportRepositoryProvider)
+          .submitReport(
             reporterId: userId,
             reportedItemId: widget.item.id,
             reason: result['reason']!,
@@ -75,9 +78,9 @@ class _ItemDetailBodyState extends ConsumerState<_ItemDetailBody> {
           );
       if (!mounted) return;
       res.when(
-        success: (_) => ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l.reportSubmitted)),
-        ),
+        success: (_) => ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l.reportSubmitted))),
         failure: (f) => ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${l.reportFailed}: ${f.message}')),
         ),
@@ -111,9 +114,8 @@ class _ItemDetailBodyState extends ConsumerState<_ItemDetailBody> {
                 ? PageView.builder(
                     itemCount: item.photos.length,
                     onPageChanged: (i) => setState(() => _currentPhoto = i),
-                    itemBuilder: (context, i) => CachedImage(
-                      imageUrl: item.photos[i],
-                    ),
+                    itemBuilder: (context, i) =>
+                        CachedImage(imageUrl: item.photos[i]),
                   )
                 : Container(color: AppColors.surfaceLight),
           ),
@@ -150,7 +152,9 @@ class _ItemDetailBodyState extends ConsumerState<_ItemDetailBody> {
                     if (item.btVerified)
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         margin: const EdgeInsets.only(right: 8),
                         decoration: BoxDecoration(
                           color: AppColors.verified.withValues(alpha: 0.15),
@@ -159,7 +163,11 @@ class _ItemDetailBodyState extends ConsumerState<_ItemDetailBody> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.bluetooth, size: 14, color: AppColors.verified),
+                            const Icon(
+                              Icons.bluetooth,
+                              size: 14,
+                              color: AppColors.verified,
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               l.btVerified,
@@ -175,7 +183,9 @@ class _ItemDetailBodyState extends ConsumerState<_ItemDetailBody> {
                     if (item.conditionGrade != null)
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.surfaceLight,
                           borderRadius: BorderRadius.circular(6),
@@ -231,7 +241,9 @@ class _ItemDetailBodyState extends ConsumerState<_ItemDetailBody> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  l.depositAmount(CurrencyFormatter.format(item.deposit, item.currency)),
+                  l.depositAmount(
+                    CurrencyFormatter.format(item.deposit, item.currency),
+                  ),
                   style: const TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 14,
@@ -264,14 +276,18 @@ class _ItemDetailBodyState extends ConsumerState<_ItemDetailBody> {
                 _InfoRow(
                   icon: Icons.local_shipping_outlined,
                   label: l.pickup,
-                  value: item.pickupMethod,
+                  value: PickupMethod.fromString(
+                    item.pickupMethod,
+                  ).localizedLabel(l),
                 ),
                 if (item.availableFrom != null && item.availableTo != null)
                   _InfoRow(
                     icon: Icons.date_range,
                     label: l.available,
                     value: DateFormatter.rentalPeriod(
-                        item.availableFrom!, item.availableTo!),
+                      item.availableFrom!,
+                      item.availableTo!,
+                    ),
                   ),
                 const SizedBox(height: 100),
               ],
@@ -301,10 +317,7 @@ class _BookButton extends StatelessWidget {
         child: DolpinButton(
           label: l.bookNow,
           onPressed: () {
-            context.pushNamed(
-              'reserve',
-              pathParameters: {'itemId': item.id},
-            );
+            context.pushNamed('reserve', pathParameters: {'itemId': item.id});
           },
         ),
       ),

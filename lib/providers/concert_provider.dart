@@ -7,32 +7,34 @@ import '../data/repositories/concert_repository.dart';
 
 final upcomingConcertsProvider = FutureProvider.autoDispose
     .family<List<ConcertModel>, String?>((ref, country) async {
-  final result =
-      await ref.watch(concertRepositoryProvider).getUpcoming(country: country);
-  return result.when(
-    success: (concerts) => concerts,
-    failure: (f) => throw Exception('${f.runtimeType}: ${f.message}'),
-  );
-});
+      final result = await ref
+          .watch(concertRepositoryProvider)
+          .getUpcoming(country: country);
+      return result.when(
+        success: (concerts) => concerts,
+        failure: (f) => throw f,
+      );
+    });
 
 final concertDetailProvider = FutureProvider.autoDispose
     .family<ConcertModel, String>((ref, id) async {
-  final result = await ref.watch(concertRepositoryProvider).getById(id);
-  return result.when(
-    success: (concert) => concert,
-    failure: (f) => throw Exception('${f.runtimeType}: ${f.message}'),
-  );
-});
+      final result = await ref.watch(concertRepositoryProvider).getById(id);
+      return result.when(
+        success: (concert) => concert,
+        failure: (f) => throw f,
+      );
+    });
 
 // ---------------------------------------------------------------------------
 // Paginated variants
 // ---------------------------------------------------------------------------
 
 final paginatedUpcomingConcertsProvider = AsyncNotifierProvider.autoDispose
-    .family<PaginatedUpcomingConcertsNotifier, PaginatedState<ConcertModel>,
-        String?>(
-  PaginatedUpcomingConcertsNotifier.new,
-);
+    .family<
+      PaginatedUpcomingConcertsNotifier,
+      PaginatedState<ConcertModel>,
+      String?
+    >(PaginatedUpcomingConcertsNotifier.new);
 
 class PaginatedUpcomingConcertsNotifier
     extends PaginatedFamilyAsyncNotifier<ConcertModel, String?> {

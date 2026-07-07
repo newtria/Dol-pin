@@ -8,11 +8,7 @@ import '../../../shared/widgets/cached_image.dart';
 import '../../../shared/widgets/dolpin_card.dart';
 
 class ConcertCard extends StatelessWidget {
-  const ConcertCard({
-    super.key,
-    required this.concert,
-    this.onTap,
-  });
+  const ConcertCard({super.key, required this.concert, this.onTap});
 
   final ConcertModel concert;
   final VoidCallback? onTap;

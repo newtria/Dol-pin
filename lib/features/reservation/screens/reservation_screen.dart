@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../data/models/rental_item_model.dart';
-import '../../../core/constants/enums.dart';
 import '../../../core/errors/result.dart';
 import '../../../data/models/user_model.dart';
+import '../../../data/models/reservation_model.dart';
+import '../../../data/datasources/supabase_client.dart';
+import '../../../data/repositories/chat_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/reservation_repository.dart';
 import '../../../l10n/app_localizations.dart';
@@ -18,6 +20,7 @@ import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/widgets/error_view.dart';
 import '../../../shared/widgets/safe_badge.dart';
 import '../../../data/datasources/payment_service.dart';
+import '../application/reservation_checkout_controller.dart';
 import 'payment_screen.dart';
 
 class ReservationScreen extends ConsumerWidget {
@@ -29,9 +32,7 @@ class ReservationScreen extends ConsumerWidget {
     final itemAsync = ref.watch(rentalDetailProvider(itemId));
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(AppLocalizations.of(context)!.bookRental),
-      ),
+      appBar: AppBar(title: Text(AppLocalizations.of(context)!.bookRental)),
       body: itemAsync.when(
         data: (item) => _ReservationBody(item: item),
         loading: () => const LoadingIndicator(),
@@ -56,8 +57,9 @@ class _ReservationBodyState extends ConsumerState<_ReservationBody> {
   DateTimeRange? _dateRange;
   bool _isLoading = false;
 
-  int get _days =>
-      _dateRange != null ? _dateRange!.duration.inDays.clamp(1, 365) : 0;
+  int get _days => _dateRange != null
+      ? ReservationCheckoutPolicy.rentalDays(_dateRange!.start, _dateRange!.end)
+      : 0;
   int get _rentalFee => widget.item.dailyPrice * _days;
   int get _total => _rentalFee + widget.item.deposit;
 
@@ -69,51 +71,59 @@ class _ReservationBodyState extends ConsumerState<_ReservationBody> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-                  primary: AppColors.primary,
-                ),
+            colorScheme: Theme.of(
+              context,
+            ).colorScheme.copyWith(primary: AppColors.primary),
           ),
           child: child!,
         );
       },
     );
     if (range != null) {
-      setState(() => _dateRange = range);
+      final end = range.end.isAfter(range.start)
+          ? range.end
+          : range.start.add(const Duration(days: 1));
+      setState(() => _dateRange = DateTimeRange(start: range.start, end: end));
     }
   }
 
   Future<void> _proceed() async {
     if (_dateRange == null) return;
 
+    final l = AppLocalizations.of(context)!;
     final item = widget.item;
-    if (item.availableFrom != null && item.availableTo != null) {
-      if (_dateRange!.start.isBefore(item.availableFrom!) ||
-          _dateRange!.end.isAfter(item.availableTo!)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context)!.datesOutsideAvailability)),
-        );
-        return;
-      }
+    if (!ReservationCheckoutPolicy.isWithinAvailability(
+      item: item,
+      rentalDate: _dateRange!.start,
+      returnDate: _dateRange!.end,
+    )) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l.datesOutsideAvailability)));
+      return;
     }
 
     final userId = ref.read(currentUserIdProvider);
     if (userId == null) return;
+    if (!ReservationCheckoutPolicy.isCheckoutCurrencyConfigured(
+      item.currency,
+    )) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l.paymentNotConfigured(item.currency))),
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {
       final results = await Future.wait([
-        ref.read(reservationRepositoryProvider).create({
-          'item_id': item.id,
-          'borrower_id': userId,
-          'lender_id': item.lenderId,
-          'rental_date': _dateRange!.start.toIso8601String().split('T').first,
-          'return_date': _dateRange!.end.toIso8601String().split('T').first,
-          'rental_fee': _rentalFee,
-          'deposit': item.deposit,
-          'total_paid': _total,
-          'currency': item.currency,
-          'status': ReservationStatus.pending.value,
-        }),
+        ref
+            .read(reservationRepositoryProvider)
+            .createIntent(
+              itemId: item.id,
+              rentalDate: _dateRange!.start,
+              returnDate: _dateRange!.end,
+            ),
         ref.read(authRepositoryProvider).getProfile(item.lenderId),
       ]);
 
@@ -123,61 +133,158 @@ class _ReservationBodyState extends ConsumerState<_ReservationBody> {
 
       if (reservationResult.isFailure) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${AppLocalizations.of(context)!.reservationFailed}: ${reservationResult.failure.message}')),
+          SnackBar(
+            content: Text(
+              '${AppLocalizations.of(context)!.reservationFailed}: ${reservationResult.failure.message}',
+            ),
+          ),
         );
         return;
       }
 
       final lenderName = profileResult.when(
-        success: (user) => user?.nickname ?? 'User',
-        failure: (_) => 'User',
+        success: (user) => user?.nickname ?? l.guest,
+        failure: (_) => l.guest,
       );
+      final reservation = reservationResult.value as ReservationModel;
 
       // Navigate to payment screen (KRW only for now)
       if (item.currency == 'KRW') {
-        final gateway = ref.read(paymentServiceProvider).gatewayForCurrency('KRW') as PortOneGateway;
+        final gateway =
+            ref.read(paymentServiceProvider).gatewayForCurrency('KRW')
+                as PortOneGateway;
         final userProfile = ref.read(currentUserProvider).valueOrNull;
         final params = gateway.buildParams(
-          reservationId: reservationResult.value.toString(),
-          amount: _total,
+          reservationId: reservation.id,
+          amount: reservation.totalPaid,
           itemName: item.title,
-          buyerName: userProfile?.nickname ?? 'User',
+          buyerName: userProfile?.nickname ?? l.guest,
           buyerTel: userProfile?.phone ?? '',
         );
+        final attemptResult = await ref
+            .read(reservationRepositoryProvider)
+            .startPaymentAttempt(
+              reservationId: reservation.id,
+              merchantUid: params.merchantUid,
+            );
+        if (attemptResult.isFailure) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(attemptResult.failure.message)),
+          );
+          return;
+        }
 
         if (!mounted) return;
         final paymentResult = await Navigator.push<PaymentResult>(
           context,
-          MaterialPageRoute(
-            builder: (_) => PaymentScreen(params: params),
-          ),
+          MaterialPageRoute(builder: (_) => PaymentScreen(params: params)),
         );
 
         if (!mounted) return;
-        if (paymentResult == null || paymentResult.status != PaymentStatus.success) {
+        if (paymentResult == null ||
+            paymentResult.status != PaymentStatus.success) {
+          await ref.read(reservationRepositoryProvider).cancel(reservation.id);
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(AppLocalizations.of(context)!.reservationFailed)),
+            SnackBar(
+              content: Text(AppLocalizations.of(context)!.reservationFailed),
+            ),
           );
           return;
         }
-      }
+        final impUid = paymentResult.impUid;
+        if (impUid == null || impUid.isEmpty) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(l.paymentVerificationFailed)));
+          context.goNamed(
+            'reservationDetail',
+            pathParameters: {'id': reservation.id},
+          );
+          return;
+        }
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.reservationCreated),
-          backgroundColor: AppColors.success,
-        ),
-      );
-      context.pushReplacementNamed(
-        'chatRoom',
-        pathParameters: {'userId': item.lenderId},
-        queryParameters: {'name': lenderName},
-      );
+        final authJwt = ref
+            .read(supabaseProvider)
+            .auth
+            .currentSession
+            ?.accessToken;
+        final verificationResult = await const PaymentVerificationRetrier()
+            .verify(gateway: gateway, paymentRef: impUid, authJwt: authJwt);
+        if (!mounted) return;
+        if (verificationResult.isFailure ||
+            verificationResult.value.status != PaymentStatus.success) {
+          if (verificationResult.isFailure) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(verificationResult.failure.message)),
+            );
+            context.goNamed(
+              'reservationDetail',
+              pathParameters: {'id': reservation.id},
+            );
+            return;
+          }
+          if (verificationResult.value.status != PaymentStatus.success) {
+            await ref
+                .read(reservationRepositoryProvider)
+                .cancel(reservation.id);
+          }
+          if (!mounted) return;
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(l.paymentVerificationFailed)));
+          return;
+        }
+
+        var roomId = verificationResult.value.roomId;
+        if (roomId == null || roomId.isEmpty) {
+          final roomResult = await ref
+              .read(chatRepositoryProvider)
+              .getOrCreateRoom(
+                userId,
+                item.lenderId,
+                itemId: item.id,
+                reservationId: reservation.id,
+              );
+          if (roomResult.isSuccess) {
+            roomId = roomResult.value;
+          }
+        }
+
+        if (!mounted) return;
+        if (roomId == null || roomId.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l.chatWillBeAvailableAfterConfirmation)),
+          );
+          context.goNamed(
+            'reservationDetail',
+            pathParameters: {'id': reservation.id},
+          );
+          return;
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.reservationCreated),
+            backgroundColor: AppColors.success,
+          ),
+        );
+        context.pushReplacementNamed(
+          'chatRoom',
+          pathParameters: {'roomId': roomId, 'userId': item.lenderId},
+          queryParameters: {'name': lenderName},
+        );
+        return;
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${AppLocalizations.of(context)!.reservationFailed}: $e')),
+          SnackBar(
+            content: Text(
+              '${AppLocalizations.of(context)!.reservationFailed}: $e',
+            ),
+          ),
         );
       }
     } finally {
@@ -252,7 +359,9 @@ class _ReservationBodyState extends ConsumerState<_ReservationBody> {
                   Text(
                     _dateRange != null
                         ? DateFormatter.rentalPeriod(
-                            _dateRange!.start, _dateRange!.end)
+                            _dateRange!.start,
+                            _dateRange!.end,
+                          )
                         : l.selectRentalDates,
                     style: TextStyle(
                       color: _dateRange != null
@@ -274,14 +383,14 @@ class _ReservationBodyState extends ConsumerState<_ReservationBody> {
           const SizedBox(height: 32),
           Text(
             l.priceSummary,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 16),
           _PriceRow(
-            label: l.rentalFeeLabel(CurrencyFormatter.format(item.dailyPrice, currency), _days),
+            label: l.rentalFeeLabel(
+              CurrencyFormatter.format(item.dailyPrice, currency),
+              _days,
+            ),
             value: CurrencyFormatter.format(_rentalFee, currency),
           ),
           const SizedBox(height: 8),

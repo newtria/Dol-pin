@@ -23,7 +23,7 @@ abstract class PaginatedFamilyAsyncNotifier<T, A>
         items: items,
         hasMore: items.length == kPaginatedPageSize,
       ),
-      failure: (f) => throw Exception('${f.runtimeType}: ${f.message}'),
+      failure: (f) => throw f,
     );
   }
 
@@ -39,12 +39,14 @@ abstract class PaginatedFamilyAsyncNotifier<T, A>
 
     result.when(
       success: (newItems) {
-        state = AsyncData(current.copyWith(
-          items: [...current.items, ...newItems],
-          isLoadingMore: false,
-          hasMore: newItems.length == kPaginatedPageSize,
-          page: current.page + 1,
-        ));
+        state = AsyncData(
+          current.copyWith(
+            items: [...current.items, ...newItems],
+            isLoadingMore: false,
+            hasMore: newItems.length == kPaginatedPageSize,
+            page: current.page + 1,
+          ),
+        );
       },
       failure: (f) {
         state = AsyncData(current.copyWith(isLoadingMore: false));

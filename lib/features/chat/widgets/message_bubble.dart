@@ -25,19 +25,20 @@ class MessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        mainAxisAlignment:
-            isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMine
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (isMine)
             Padding(
               padding: const EdgeInsets.only(right: 4),
               child: Text(
-                DateFormatter.relative(timestamp, AppLocalizations.of(context)!),
-                style: const TextStyle(
-                  color: AppColors.textHint,
-                  fontSize: 10,
+                DateFormatter.relative(
+                  timestamp,
+                  AppLocalizations.of(context)!,
                 ),
+                style: const TextStyle(color: AppColors.textHint, fontSize: 10),
               ),
             ),
           Flexible(
@@ -81,7 +82,11 @@ class MessageBubble extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.translate, size: 12, color: AppColors.textHint),
+                          const Icon(
+                            Icons.translate,
+                            size: 12,
+                            color: AppColors.textHint,
+                          ),
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
@@ -106,11 +111,11 @@ class MessageBubble extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(left: 4),
               child: Text(
-                DateFormatter.relative(timestamp, AppLocalizations.of(context)!),
-                style: const TextStyle(
-                  color: AppColors.textHint,
-                  fontSize: 10,
+                DateFormatter.relative(
+                  timestamp,
+                  AppLocalizations.of(context)!,
                 ),
+                style: const TextStyle(color: AppColors.textHint, fontSize: 10),
               ),
             ),
         ],

@@ -399,6 +399,180 @@ abstract class AppLocalizations {
   /// **'Reservation failed'**
   String get reservationFailed;
 
+  /// No description provided for @paymentNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'{currency} payments are not configured yet'**
+  String paymentNotConfigured(Object currency);
+
+  /// No description provided for @paymentVerificationPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment was received. We could not confirm it yet, so this reservation is waiting for verification.'**
+  String get paymentVerificationPending;
+
+  /// No description provided for @paymentVerificationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment verification failed'**
+  String get paymentVerificationFailed;
+
+  /// No description provided for @chatWillBeAvailableAfterConfirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Reservation was created. Chat will be available from the reservation detail after confirmation.'**
+  String get chatWillBeAvailableAfterConfirmation;
+
+  /// No description provided for @reservationCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Reservation cancelled'**
+  String get reservationCancelled;
+
+  /// No description provided for @pickupConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup confirmed'**
+  String get pickupConfirmed;
+
+  /// No description provided for @returnConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Return confirmed'**
+  String get returnConfirmed;
+
+  /// No description provided for @reservationSettled.
+  ///
+  /// In en, this message translates to:
+  /// **'Reservation settled'**
+  String get reservationSettled;
+
+  /// No description provided for @reservationStatusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get reservationStatusPending;
+
+  /// No description provided for @reservationStatusPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get reservationStatusPaid;
+
+  /// No description provided for @reservationStatusPickedUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Picked up'**
+  String get reservationStatusPickedUp;
+
+  /// No description provided for @reservationStatusReturned.
+  ///
+  /// In en, this message translates to:
+  /// **'Returned'**
+  String get reservationStatusReturned;
+
+  /// No description provided for @reservationStatusSettled.
+  ///
+  /// In en, this message translates to:
+  /// **'Settled'**
+  String get reservationStatusSettled;
+
+  /// No description provided for @reservationStatusCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get reservationStatusCancelled;
+
+  /// No description provided for @reservationStatusDisputed.
+  ///
+  /// In en, this message translates to:
+  /// **'Disputed'**
+  String get reservationStatusDisputed;
+
+  /// No description provided for @reservationStatusResolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolved'**
+  String get reservationStatusResolved;
+
+  /// No description provided for @disputeOpened.
+  ///
+  /// In en, this message translates to:
+  /// **'Dispute opened'**
+  String get disputeOpened;
+
+  /// No description provided for @confirmPickup.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm pickup'**
+  String get confirmPickup;
+
+  /// No description provided for @cancelAndRefund.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel and refund'**
+  String get cancelAndRefund;
+
+  /// No description provided for @confirmReturn.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm return'**
+  String get confirmReturn;
+
+  /// No description provided for @settleDeposit.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle deposit'**
+  String get settleDeposit;
+
+  /// No description provided for @confirmRefundMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This will cancel the reservation and request a refund. Continue?'**
+  String get confirmRefundMessage;
+
+  /// No description provided for @confirmSettlementMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This will refund the deposit and close the reservation. Continue?'**
+  String get confirmSettlementMessage;
+
+  /// No description provided for @openDispute.
+  ///
+  /// In en, this message translates to:
+  /// **'Open dispute'**
+  String get openDispute;
+
+  /// No description provided for @openChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Open chat'**
+  String get openChat;
+
+  /// No description provided for @reservationId.
+  ///
+  /// In en, this message translates to:
+  /// **'Reservation ID'**
+  String get reservationId;
+
+  /// No description provided for @paymentId.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment ID'**
+  String get paymentId;
+
+  /// No description provided for @disputeReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Dispute reason'**
+  String get disputeReason;
+
+  /// No description provided for @describeIssue.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe the issue'**
+  String get describeIssue;
+
   /// No description provided for @bookNow.
   ///
   /// In en, this message translates to:
@@ -465,6 +639,18 @@ abstract class AppLocalizations {
   /// **'Register Item'**
   String get registerItem;
 
+  /// No description provided for @concert.
+  ///
+  /// In en, this message translates to:
+  /// **'Concert'**
+  String get concert;
+
+  /// No description provided for @selectConcert.
+  ///
+  /// In en, this message translates to:
+  /// **'Select concert'**
+  String get selectConcert;
+
   /// No description provided for @category.
   ///
   /// In en, this message translates to:
@@ -512,6 +698,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pickup Method'**
   String get pickupMethod;
+
+  /// No description provided for @availability.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability'**
+  String get availability;
+
+  /// No description provided for @selectAvailability.
+  ///
+  /// In en, this message translates to:
+  /// **'Select availability'**
+  String get selectAvailability;
+
+  /// No description provided for @pickupLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup location'**
+  String get pickupLocation;
+
+  /// No description provided for @pickupLocationHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g., KSPO Dome Gate 2'**
+  String get pickupLocationHint;
 
   /// No description provided for @register.
   ///

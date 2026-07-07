@@ -54,6 +54,41 @@ class RentalRepository {
     }
   }
 
+  Future<Result<List<RentalItemModel>>> getFiltered({
+    String? concertId,
+    String? category,
+    String? searchQuery,
+    int limit = kDefaultPageLimit,
+    int offset = 0,
+  }) async {
+    final safeQuery = searchQuery == null
+        ? null
+        : _sanitizeSearchQuery(searchQuery);
+    try {
+      var query = _client
+          .from(DbTables.rentalItems)
+          .select()
+          .eq('status', ItemStatus.active.name);
+      if (concertId != null && concertId.isNotEmpty) {
+        query = query.eq('concert_id', concertId);
+      }
+      if (category != null && category.isNotEmpty) {
+        query = query.eq('category', category);
+      }
+      if (safeQuery != null && safeQuery.isNotEmpty) {
+        query = query.or(
+          'title.ilike.%$safeQuery%,description.ilike.%$safeQuery%',
+        );
+      }
+      final data = await query
+          .order('created_at', ascending: false)
+          .range(safeOffset(offset), safeOffset(offset) + safeLimit(limit) - 1);
+      return Success(data.map((e) => RentalItemModel.fromJson(e)).toList());
+    } catch (e) {
+      return Fail(mapException(e));
+    }
+  }
+
   Future<Result<RentalItemModel>> getById(String id) async {
     try {
       final data = await _client
@@ -138,7 +173,8 @@ class RentalRepository {
     try {
       await _client
           .from(DbTables.rentalItems)
-          .update({'status': status.name}).eq('id', id);
+          .update({'status': status.name})
+          .eq('id', id);
       return const Success(null);
     } catch (e) {
       return Fail(mapException(e));

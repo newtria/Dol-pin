@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../l10n/app_localizations.dart';
 import '../constants/app_colors.dart';
+import '../constants/database.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/otp_screen.dart';
 import '../../features/auth/screens/signup_screen.dart';
@@ -17,6 +18,7 @@ import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/settings_screen.dart';
 import '../../features/profile/screens/my_rentals_screen.dart';
 import '../../features/register/screens/register_item_screen.dart';
+import '../../features/reservation/screens/reservation_detail_screen.dart';
 import '../../features/reservation/screens/reservation_screen.dart';
 
 /// Bridges a [Stream] into a [Listenable] so GoRouter re-evaluates its
@@ -28,9 +30,7 @@ import '../../features/reservation/screens/reservation_screen.dart';
 class _GoRouterRefreshStream extends ChangeNotifier {
   _GoRouterRefreshStream(Stream<dynamic> stream) {
     notifyListeners();
-    _subscription = stream.asBroadcastStream().listen(
-          (_) => notifyListeners(),
-        );
+    _subscription = stream.asBroadcastStream().listen((_) => notifyListeners());
   }
 
   late final StreamSubscription<dynamic> _subscription;
@@ -42,6 +42,31 @@ class _GoRouterRefreshStream extends ChangeNotifier {
   }
 }
 
+const _loginPath = '/login';
+const _otpPath = '/otp';
+const _signupPath = '/signup';
+
+final _profileCompletionCache = <String, bool>{};
+
+Future<bool?> _profileExists(SupabaseClient client, String userId) async {
+  if (_profileCompletionCache[userId] == true) return true;
+
+  try {
+    final row = await client
+        .from(DbTables.users)
+        .select('id')
+        .eq('id', userId)
+        .maybeSingle();
+    final exists = row != null;
+    if (exists) _profileCompletionCache[userId] = true;
+    return exists;
+  } catch (_) {
+    // Fail open on transient profile lookup errors so navigation does not trap
+    // an already-onboarded user behind the signup screen while offline.
+    return null;
+  }
+}
+
 final appRouter = GoRouter(
   initialLocation: '/',
   // GoRouter redirect runs outside Riverpod scope, so direct Supabase
@@ -49,15 +74,22 @@ final appRouter = GoRouter(
   refreshListenable: _GoRouterRefreshStream(
     Supabase.instance.client.auth.onAuthStateChange,
   ),
-  redirect: (context, state) {
-    final session = Supabase.instance.client.auth.currentSession;
+  redirect: (context, state) async {
+    final client = Supabase.instance.client;
+    final session = client.auth.currentSession;
+    final path = state.uri.path;
     final isAuth = session != null;
-    final isAuthRoute = state.uri.path == '/login' ||
-        state.uri.path == '/otp' ||
-        state.uri.path == '/signup';
+    final isLoginOrOtp = path == _loginPath || path == _otpPath;
+    final isSignup = path == _signupPath;
+    final isAuthRoute = isLoginOrOtp || isSignup;
 
-    if (!isAuth && !isAuthRoute) return '/login';
-    if (isAuth && isAuthRoute) return '/';
+    if (!isAuth && !isAuthRoute) return _loginPath;
+    if (!isAuth) return null;
+    if (isLoginOrOtp) return '/';
+
+    final hasProfile = await _profileExists(client, session.user.id);
+    if (hasProfile == false) return isSignup ? null : _signupPath;
+    if (hasProfile == true && isSignup) return '/';
     return null;
   },
   routes: [
@@ -69,9 +101,8 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/otp',
       name: 'otp',
-      builder: (context, state) => OtpScreen(
-        phone: state.uri.queryParameters['phone'] ?? '',
-      ),
+      builder: (context, state) =>
+          OtpScreen(phone: state.uri.queryParameters['phone'] ?? ''),
     ),
     GoRoute(
       path: '/signup',
@@ -90,7 +121,8 @@ final appRouter = GoRouter(
         GoRoute(
           path: '/explore',
           name: 'explore',
-          builder: (context, state) => const ExploreScreen(),
+          builder: (context, state) =>
+              ExploreScreen(concertId: state.uri.queryParameters['concertId']),
         ),
         GoRoute(
           path: '/chat',
@@ -108,24 +140,30 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/item/:id',
       name: 'itemDetail',
-      builder: (context, state) => ItemDetailScreen(
-        itemId: state.pathParameters['id']!,
-      ),
+      builder: (context, state) =>
+          ItemDetailScreen(itemId: state.pathParameters['id']!),
     ),
     GoRoute(
       path: '/reserve/:itemId',
       name: 'reserve',
-      builder: (context, state) => ReservationScreen(
-        itemId: state.pathParameters['itemId']!,
-      ),
+      builder: (context, state) =>
+          ReservationScreen(itemId: state.pathParameters['itemId']!),
     ),
     GoRoute(
-      path: '/chat/:userId',
+      path: '/reservation/:id',
+      name: 'reservationDetail',
+      builder: (context, state) =>
+          ReservationDetailScreen(reservationId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/chat/:roomId/:userId',
       name: 'chatRoom',
       builder: (context, state) => ChatRoomScreen(
         otherUserId: state.pathParameters['userId']!,
-        otherUserName: state.uri.queryParameters['name'] ?? 'User',
-        roomId: state.uri.queryParameters['roomId'] ?? '',
+        otherUserName:
+            state.uri.queryParameters['name'] ??
+            AppLocalizations.of(context)!.guest,
+        roomId: state.pathParameters['roomId']!,
       ),
     ),
     GoRoute(

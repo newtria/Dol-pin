@@ -56,7 +56,11 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       success: (_) {},
       failure: (f) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${AppLocalizations.of(context)!.sendFailed}: ${f.message}')),
+          SnackBar(
+            content: Text(
+              '${AppLocalizations.of(context)!.sendFailed}: ${f.message}',
+            ),
+          ),
         );
       },
     );
@@ -70,6 +74,12 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       return Scaffold(
         appBar: AppBar(title: Text(widget.otherUserName)),
         body: Center(child: Text(l.notLoggedIn)),
+      );
+    }
+    if (widget.roomId.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.otherUserName)),
+        body: Center(child: Text(l.couldNotLoadMessages)),
       );
     }
 
@@ -122,9 +132,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                   },
                 );
               },
-              loading: () => const Center(
-                child: CircularProgressIndicator(),
-              ),
+              loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(
                 child: Text(
                   l.errorLoadingMessages,
@@ -137,9 +145,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
             padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
             decoration: const BoxDecoration(
               color: AppColors.surface,
-              border: Border(
-                top: BorderSide(color: AppColors.divider),
-              ),
+              border: Border(top: BorderSide(color: AppColors.divider)),
             ),
             child: SafeArea(
               top: false,
@@ -186,7 +192,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     if (value == 'report') {
       final result = await ReportDialog.show(context, widget.otherUserName);
       if (result != null && mounted) {
-        final res = await ref.read(reportRepositoryProvider).submitReport(
+        final res = await ref
+            .read(reportRepositoryProvider)
+            .submitReport(
               reporterId: userId,
               reportedUserId: widget.otherUserId,
               reason: result['reason']!,
@@ -194,9 +202,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
             );
         if (!mounted) return;
         res.when(
-          success: (_) => ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l.reportSubmitted)),
-          ),
+          success: (_) => ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(l.reportSubmitted))),
           failure: (f) => ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('${l.reportFailed}: ${f.message}')),
           ),
@@ -211,16 +219,15 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         isDestructive: true,
       );
       if (confirmed && mounted) {
-        final res = await ref.read(reportRepositoryProvider).blockUser(
-              blockerId: userId,
-              blockedId: widget.otherUserId,
-            );
+        final res = await ref
+            .read(reportRepositoryProvider)
+            .blockUser(blockerId: userId, blockedId: widget.otherUserId);
         if (!mounted) return;
         res.when(
           success: (_) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(l.userBlocked)),
-            );
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(l.userBlocked)));
             Navigator.of(context).pop();
           },
           failure: (f) => ScaffoldMessenger.of(context).showSnackBar(

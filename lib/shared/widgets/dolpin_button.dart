@@ -24,23 +24,23 @@ class DolpinButton extends StatelessWidget {
       height: 52,
       child: switch (variant) {
         DolpinButtonVariant.primary => ElevatedButton(
-            onPressed: isLoading ? null : onPressed,
-            child: _buildChild(),
-          ),
+          onPressed: isLoading ? null : onPressed,
+          child: _buildChild(),
+        ),
         DolpinButtonVariant.outline => OutlinedButton(
-            onPressed: isLoading ? null : onPressed,
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: AppColors.primary),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+          onPressed: isLoading ? null : onPressed,
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: AppColors.primary),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: _buildChild(),
           ),
+          child: _buildChild(),
+        ),
         DolpinButtonVariant.text => TextButton(
-            onPressed: isLoading ? null : onPressed,
-            child: _buildChild(),
-          ),
+          onPressed: isLoading ? null : onPressed,
+          child: _buildChild(),
+        ),
       },
     );
   }

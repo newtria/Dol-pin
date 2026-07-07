@@ -17,11 +17,10 @@ class PaginatedState<T> {
     bool? isLoadingMore,
     bool? hasMore,
     int? page,
-  }) =>
-      PaginatedState(
-        items: items ?? this.items,
-        isLoadingMore: isLoadingMore ?? this.isLoadingMore,
-        hasMore: hasMore ?? this.hasMore,
-        page: page ?? this.page,
-      );
+  }) => PaginatedState(
+    items: items ?? this.items,
+    isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+    hasMore: hasMore ?? this.hasMore,
+    page: page ?? this.page,
+  );
 }

@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../l10n/app_localizations.dart';
-import '../../../providers/auth_provider.dart';
-import '../../../providers/rental_provider.dart';
-import '../../../providers/reservation_provider.dart';
-import '../../../shared/widgets/cached_image.dart';
-import '../../../shared/widgets/loading_indicator.dart';
+import '../../../core/constants/enums.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../../data/models/reservation_model.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../providers/reservation_provider.dart';
+import '../../../shared/widgets/loading_indicator.dart';
 
 class MyRentalsScreen extends ConsumerWidget {
   const MyRentalsScreen({super.key});
@@ -50,14 +50,14 @@ class _LenderTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l = AppLocalizations.of(context)!;
-    final itemsAsync = ref.watch(myRentalsProvider(userId));
+    final reservationsAsync = ref.watch(lenderReservationsProvider(userId));
 
-    return itemsAsync.when(
-      data: (items) {
-        if (items.isEmpty) {
+    return reservationsAsync.when(
+      data: (reservations) {
+        if (reservations.isEmpty) {
           return Center(
             child: Text(
-              l.noItemsRegistered,
+              l.noReservationsYet,
               textAlign: TextAlign.center,
               style: const TextStyle(color: AppColors.textSecondary),
             ),
@@ -65,40 +65,9 @@ class _LenderTab extends ConsumerWidget {
         }
         return ListView.builder(
           padding: const EdgeInsets.all(16),
-          itemCount: items.length,
+          itemCount: reservations.length,
           itemBuilder: (context, index) {
-            final item = items[index];
-            return Card(
-              color: AppColors.card,
-              margin: const EdgeInsets.only(bottom: 12),
-              child: ListTile(
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: item.photos.isNotEmpty
-                      ? CachedImage(
-                          imageUrl: item.photos.first,
-                          width: 56,
-                          height: 56,
-                        )
-                      : Container(
-                          width: 56,
-                          height: 56,
-                          color: AppColors.surfaceLight,
-                          child: const Icon(Icons.image),
-                        ),
-                ),
-                title: Text(item.title),
-                subtitle: Text(
-                  '${CurrencyFormatter.format(item.dailyPrice, item.currency)}/day - ${item.status}',
-                  style: const TextStyle(color: AppColors.textSecondary),
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.pushNamed(
-                  'itemDetail',
-                  pathParameters: {'id': item.id},
-                ),
-              ),
-            );
+            return _ReservationTile(reservation: reservations[index]);
           },
         );
       },
@@ -133,22 +102,7 @@ class _BorrowerTab extends ConsumerWidget {
           itemCount: reservations.length,
           itemBuilder: (context, index) {
             final res = reservations[index];
-            return Card(
-              color: AppColors.card,
-              margin: const EdgeInsets.only(bottom: 12),
-              child: ListTile(
-                leading: _StatusIcon(status: res.status),
-                title: Text(
-                  DateFormatter.rentalPeriod(res.rentalDate, res.returnDate),
-                ),
-                subtitle: Text(
-                  '${CurrencyFormatter.format(res.totalPaid, res.currency)} - ${res.status}',
-                  style: const TextStyle(color: AppColors.textSecondary),
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {},
-              ),
-            );
+            return _ReservationTile(reservation: res);
           },
         );
       },
@@ -158,19 +112,61 @@ class _BorrowerTab extends ConsumerWidget {
   }
 }
 
+class _ReservationTile extends StatelessWidget {
+  const _ReservationTile({required this.reservation});
+
+  final ReservationModel reservation;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
+    final status = ReservationStatus.fromString(reservation.status);
+    return Card(
+      color: AppColors.card,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        leading: _StatusIcon(status: status),
+        title: Text(
+          DateFormatter.rentalPeriod(
+            reservation.rentalDate,
+            reservation.returnDate,
+          ),
+        ),
+        subtitle: Text(
+          '${CurrencyFormatter.format(reservation.totalPaid, reservation.currency)} - ${status.localizedLabel(l)}',
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => context.pushNamed(
+          'reservationDetail',
+          pathParameters: {'id': reservation.id},
+        ),
+      ),
+    );
+  }
+}
+
 class _StatusIcon extends StatelessWidget {
   const _StatusIcon({required this.status});
-  final String status;
+  final ReservationStatus status;
 
   @override
   Widget build(BuildContext context) {
     final (icon, color) = switch (status) {
-      'pending' => (Icons.schedule, AppColors.warning),
-      'accepted' || 'paid' => (Icons.check_circle_outline, AppColors.accent),
-      'picked_up' => (Icons.inventory_2, AppColors.primary),
-      'returned' || 'completed' => (Icons.done_all, AppColors.success),
-      'rejected' || 'cancelled' => (Icons.cancel_outlined, AppColors.error),
-      _ => (Icons.help_outline, AppColors.textHint),
+      ReservationStatus.pending => (Icons.schedule, AppColors.warning),
+      ReservationStatus.paid => (Icons.check_circle_outline, AppColors.accent),
+      ReservationStatus.pickedUp => (Icons.inventory_2, AppColors.primary),
+      ReservationStatus.returned => (
+        Icons.assignment_return,
+        AppColors.success,
+      ),
+      ReservationStatus.settled ||
+      ReservationStatus.resolved => (Icons.done_all, AppColors.success),
+      ReservationStatus.disputed => (
+        Icons.report_problem_outlined,
+        AppColors.warning,
+      ),
+      ReservationStatus.cancelled => (Icons.cancel_outlined, AppColors.error),
     };
     return Icon(icon, color: color, size: 32);
   }

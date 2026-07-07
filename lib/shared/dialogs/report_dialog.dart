@@ -7,7 +7,9 @@ class ReportDialog extends StatefulWidget {
   final String targetName;
 
   static Future<Map<String, String>?> show(
-      BuildContext context, String targetName) {
+    BuildContext context,
+    String targetName,
+  ) {
     return showDialog<Map<String, String>>(
       context: context,
       builder: (_) => ReportDialog(targetName: targetName),
@@ -78,9 +80,7 @@ class _ReportDialogState extends State<ReportDialog> {
             TextField(
               controller: _descController,
               maxLines: 3,
-              decoration: InputDecoration(
-                hintText: l.additionalDetails,
-              ),
+              decoration: InputDecoration(hintText: l.additionalDetails),
             ),
           ],
         ),
@@ -93,9 +93,9 @@ class _ReportDialogState extends State<ReportDialog> {
         ElevatedButton(
           onPressed: _reason != null
               ? () => Navigator.pop(context, {
-                    'reason': _reason!,
-                    'description': _descController.text,
-                  })
+                  'reason': _reason!,
+                  'description': _descController.text,
+                })
               : null,
           child: Text(l.report),
         ),

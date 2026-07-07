@@ -53,8 +53,9 @@ class ConditionSelector extends StatelessWidget {
                   child: Text(
                     value,
                     style: TextStyle(
-                      color:
-                          isSelected ? Colors.white : AppColors.textSecondary,
+                      color: isSelected
+                          ? Colors.white
+                          : AppColors.textSecondary,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -68,8 +69,9 @@ class ConditionSelector extends StatelessWidget {
                         label,
                         style: TextStyle(
                           color: AppColors.textPrimary,
-                          fontWeight:
-                              isSelected ? FontWeight.w600 : FontWeight.normal,
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.normal,
                         ),
                       ),
                       Text(

@@ -5,6 +5,7 @@ import '../../core/errors/failures.dart';
 import '../../core/errors/result.dart';
 import '../datasources/supabase_client.dart';
 import '../models/chat_message_model.dart';
+import '../models/chat_summary_model.dart';
 
 final chatRepositoryProvider = Provider<ChatRepository>((ref) {
   return ChatRepository(ref.watch(supabaseProvider));
@@ -14,27 +15,38 @@ class ChatRepository {
   ChatRepository(this._client);
   final SupabaseClient _client;
 
-  Future<Result<List<Map<String, dynamic>>>> getChatList(
-      String userId) async {
+  Future<Result<List<ChatSummaryModel>>> getChatList(String userId) async {
     try {
-      final data = await _client
-          .rpc(DbFunctions.getChatList, params: {'p_user_id': userId});
-      return Success(List<Map<String, dynamic>>.from(data));
+      final data = await _client.rpc(
+        DbFunctions.getChatList,
+        params: {'p_user_id': userId},
+      );
+      final rows = (data as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList();
+      return Success(rows.map(ChatSummaryModel.fromJson).toList());
     } catch (e) {
       return Fail(mapException(e));
     }
   }
 
   /// Gets or creates a chat room between two users.
-  Future<Result<String>> getOrCreateRoom(String userId, String otherUserId,
-      {String? itemId}) async {
+  Future<Result<String>> getOrCreateRoom(
+    String userId,
+    String otherUserId, {
+    String? itemId,
+    String? reservationId,
+  }) async {
     try {
-      final roomId =
-          await _client.rpc(DbFunctions.getOrCreateRoom, params: {
-        'user_a': userId,
-        'user_b': otherUserId,
-        'p_item_id': itemId,
-      });
+      final roomId = await _client.rpc(
+        DbFunctions.getOrCreateRoom,
+        params: {
+          'user_a': userId,
+          'user_b': otherUserId,
+          'p_item_id': itemId,
+          'p_reservation_id': reservationId,
+        },
+      );
       return Success(roomId as String);
     } catch (e) {
       return Fail(mapException(e));
@@ -53,7 +65,9 @@ class ChatRepository {
 
   /// Sends a message within a specific room.
   Future<Result<ChatMessageModel>> sendRoomMessage(
-      Map<String, dynamic> message, String roomId) async {
+    Map<String, dynamic> message,
+    String roomId,
+  ) async {
     try {
       final data = await _client
           .from(DbTables.chatMessages)

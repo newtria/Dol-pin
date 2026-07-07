@@ -163,6 +163,95 @@ class AppLocalizationsKo extends AppLocalizations {
   String get reservationFailed => '예약 실패';
 
   @override
+  String paymentNotConfigured(Object currency) {
+    return '$currency 결제는 아직 설정되지 않았습니다';
+  }
+
+  @override
+  String get paymentVerificationPending => '결제가 접수되었습니다. 아직 확인을 완료하지 못해 이 예약은 검증 대기 상태로 이동합니다.';
+
+  @override
+  String get paymentVerificationFailed => '결제 검증에 실패했습니다';
+
+  @override
+  String get chatWillBeAvailableAfterConfirmation => '예약이 생성되었습니다. 확인 후 예약 상세에서 채팅을 열 수 있습니다.';
+
+  @override
+  String get reservationCancelled => '예약이 취소되었습니다';
+
+  @override
+  String get pickupConfirmed => '수령이 확인되었습니다';
+
+  @override
+  String get returnConfirmed => '반납이 확인되었습니다';
+
+  @override
+  String get reservationSettled => '정산이 완료되었습니다';
+
+  @override
+  String get reservationStatusPending => '예약 대기';
+
+  @override
+  String get reservationStatusPaid => '결제 완료';
+
+  @override
+  String get reservationStatusPickedUp => '수령 완료';
+
+  @override
+  String get reservationStatusReturned => '반납 완료';
+
+  @override
+  String get reservationStatusSettled => '정산 완료';
+
+  @override
+  String get reservationStatusCancelled => '취소됨';
+
+  @override
+  String get reservationStatusDisputed => '분쟁 중';
+
+  @override
+  String get reservationStatusResolved => '해결됨';
+
+  @override
+  String get disputeOpened => '분쟁이 접수되었습니다';
+
+  @override
+  String get confirmPickup => '수령 확인';
+
+  @override
+  String get cancelAndRefund => '취소 및 환불';
+
+  @override
+  String get confirmReturn => '반납 확인';
+
+  @override
+  String get settleDeposit => '보증금 정산';
+
+  @override
+  String get confirmRefundMessage => '예약을 취소하고 환불을 요청합니다. 계속할까요?';
+
+  @override
+  String get confirmSettlementMessage => '보증금을 환불하고 예약을 종료합니다. 계속할까요?';
+
+  @override
+  String get openDispute => '분쟁 접수';
+
+  @override
+  String get openChat => '채팅 열기';
+
+  @override
+  String get reservationId => '예약 ID';
+
+  @override
+  String get paymentId => '결제 ID';
+
+  @override
+  String get disputeReason => '분쟁 사유';
+
+  @override
+  String get describeIssue => '문제를 설명해주세요';
+
+  @override
   String get bookNow => '지금 예약';
 
   @override
@@ -198,6 +287,12 @@ class AppLocalizationsKo extends AppLocalizations {
   String get registerItem => '물건 등록';
 
   @override
+  String get concert => '콘서트';
+
+  @override
+  String get selectConcert => '콘서트를 선택하세요';
+
+  @override
   String get category => '카테고리';
 
   @override
@@ -222,6 +317,18 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get pickupMethod => '수령 방법';
+
+  @override
+  String get availability => '이용 가능 기간';
+
+  @override
+  String get selectAvailability => '이용 가능 기간을 선택하세요';
+
+  @override
+  String get pickupLocation => '수령 장소';
+
+  @override
+  String get pickupLocationHint => '예: KSPO DOME 2번 게이트';
 
   @override
   String get register => '등록하기';

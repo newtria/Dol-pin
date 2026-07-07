@@ -64,20 +64,21 @@ class _ChatList extends ConsumerWidget {
                 const Divider(height: 1, color: AppColors.divider),
             itemBuilder: (context, index) {
               final chat = chats[index];
+              final nickname =
+                  chat.partnerNickname ?? AppLocalizations.of(context)!.guest;
               return ChatListTile(
-                nickname: chat['partner_nickname'] ?? 'User',
-                profileImage: chat['partner_image'] as String?,
-                lastMessage: chat['last_message'] ?? '',
-                lastMessageAt: DateTime.tryParse(
-                        chat['last_message_at']?.toString() ?? '') ??
-                    DateTime.now(),
-                unreadCount: (chat['unread_count'] as num?)?.toInt() ?? 0,
+                nickname: nickname,
+                profileImage: chat.partnerImage,
+                lastMessage: chat.lastMessage,
+                lastMessageAt: chat.lastMessageAt ?? DateTime.now(),
+                unreadCount: chat.unreadCount,
                 onTap: () => context.pushNamed(
                   'chatRoom',
-                  pathParameters: {'userId': chat['partner_id']},
-                  queryParameters: {
-                    'name': chat['partner_nickname'] ?? 'User'
+                  pathParameters: {
+                    'roomId': chat.roomId,
+                    'userId': chat.partnerId,
                   },
+                  queryParameters: {'name': nickname},
                 ),
               );
             },
@@ -119,10 +120,7 @@ class _EmptyChatState extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             l.startConversation,
-            style: const TextStyle(
-              color: AppColors.textHint,
-              fontSize: 14,
-            ),
+            style: const TextStyle(color: AppColors.textHint, fontSize: 14),
           ),
         ],
       ),
@@ -185,10 +183,7 @@ class ChatListTile extends StatelessWidget {
         children: [
           Text(
             DateFormatter.relative(lastMessageAt, l),
-            style: const TextStyle(
-              color: AppColors.textHint,
-              fontSize: 12,
-            ),
+            style: const TextStyle(color: AppColors.textHint, fontSize: 12),
           ),
           if (unreadCount > 0) ...[
             const SizedBox(height: 4),

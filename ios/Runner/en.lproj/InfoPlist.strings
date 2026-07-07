@@ -1,0 +1,6 @@
+"NSCameraUsageDescription" = "dol-pin uses the camera to photograph rental items when listing them and when confirming returns.";
+"NSPhotoLibraryUsageDescription" = "dol-pin needs access to your photo library to upload photos of rental items and return confirmations.";
+"NSPhotoLibraryAddUsageDescription" = "dol-pin saves shared rental photos to your photo library when you tap save.";
+"NSLocationWhenInUseUsageDescription" = "dol-pin uses your location to show nearby rental items for the concerts you are attending.";
+"NSBluetoothAlwaysUsageDescription" = "dol-pin scans for official K-pop lightsticks via Bluetooth to verify authenticity when you list an item.";
+"NSBluetoothPeripheralUsageDescription" = "dol-pin communicates with official K-pop lightsticks via Bluetooth to verify authenticity when you list an item.";

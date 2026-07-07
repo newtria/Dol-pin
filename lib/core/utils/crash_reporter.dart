@@ -5,14 +5,17 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 /// Crash reporting service backed by Sentry.
 ///
 /// Usage in main.dart:
-///   await CrashReporter.init('YOUR_SENTRY_DSN');
+///   await CrashReporter.init();
 ///   CrashReporter.guard(() => runApp(const MyApp()));
 class CrashReporter {
   static bool _initialized = false;
 
   /// Initialize crash reporting. No-op in debug mode.
-  static Future<void> init(String dsn) async {
+  static Future<void> init({
+    String dsn = const String.fromEnvironment('SENTRY_DSN'),
+  }) async {
     if (kDebugMode) return;
+    if (dsn.trim().isEmpty) return;
     await SentryFlutter.init((options) {
       options.dsn = dsn;
       options.tracesSampleRate = 0.2;

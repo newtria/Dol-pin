@@ -19,9 +19,33 @@ class StorageService {
       final ext = file.path.split('.').last;
       final path =
           'items/$userId/${DateTime.now().millisecondsSinceEpoch}.$ext';
-      await _client.storage.from(StorageBuckets.rentalPhotos).upload(path, file);
-      final url =
-          _client.storage.from(StorageBuckets.rentalPhotos).getPublicUrl(path);
+      await _client.storage
+          .from(StorageBuckets.rentalPhotos)
+          .upload(path, file);
+      final url = _client.storage
+          .from(StorageBuckets.rentalPhotos)
+          .getPublicUrl(path);
+      return Success(url);
+    } catch (e) {
+      return Fail(mapException(e));
+    }
+  }
+
+  Future<Result<String>> uploadReturnPhoto({
+    required String userId,
+    required String reservationId,
+    required File file,
+  }) async {
+    try {
+      final ext = file.path.split('.').last;
+      final path =
+          'returns/$reservationId/$userId/${DateTime.now().millisecondsSinceEpoch}.$ext';
+      await _client.storage
+          .from(StorageBuckets.rentalPhotos)
+          .upload(path, file);
+      final url = _client.storage
+          .from(StorageBuckets.rentalPhotos)
+          .getPublicUrl(path);
       return Success(url);
     } catch (e) {
       return Fail(mapException(e));
@@ -32,13 +56,12 @@ class StorageService {
     try {
       final ext = file.path.split('.').last;
       final path = 'profiles/$userId.$ext';
-      await _client.storage.from(StorageBuckets.profilePhotos).upload(
-            path,
-            file,
-            fileOptions: const FileOptions(upsert: true),
-          );
-      final url =
-          _client.storage.from(StorageBuckets.profilePhotos).getPublicUrl(path);
+      await _client.storage
+          .from(StorageBuckets.profilePhotos)
+          .upload(path, file, fileOptions: const FileOptions(upsert: true));
+      final url = _client.storage
+          .from(StorageBuckets.profilePhotos)
+          .getPublicUrl(path);
       return Success(url);
     } catch (e) {
       return Fail(mapException(e));
@@ -48,11 +71,11 @@ class StorageService {
   Future<Result<String>> uploadChatImage(String chatId, File file) async {
     try {
       final ext = file.path.split('.').last;
-      final path =
-          'chat/$chatId/${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final path = 'chat/$chatId/${DateTime.now().millisecondsSinceEpoch}.$ext';
       await _client.storage.from(StorageBuckets.chatImages).upload(path, file);
-      final url =
-          _client.storage.from(StorageBuckets.chatImages).getPublicUrl(path);
+      final url = _client.storage
+          .from(StorageBuckets.chatImages)
+          .getPublicUrl(path);
       return Success(url);
     } catch (e) {
       return Fail(mapException(e));
