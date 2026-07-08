@@ -1,94 +1,11 @@
-import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
-import '../../core/constants/env.dart';
 import '../../core/errors/failures.dart';
 import '../../core/errors/result.dart';
+import 'payment_edge_client.dart';
+import 'payment_models.dart';
+import 'portone_payment_mapper.dart';
 
-/// Timeout for every outbound payment-gateway request. Payment flows are
-/// user-blocking so indefinite hangs are the worst possible failure mode.
-const Duration _paymentTimeout = Duration(seconds: 20);
-
-enum PaymentStatus {
-  success,
-  pending,
-  failed;
-
-  static PaymentStatus fromString(String s) =>
-      values.firstWhere((e) => e.name == s, orElse: () => failed);
-}
-
-String _edgeErrorMessage(http.Response res, String fallback) {
-  try {
-    final data = jsonDecode(res.body) as Map<String, dynamic>;
-    final error = data['error']?.toString();
-    final impUid = data['imp_uid']?.toString();
-    if (error == null || error.isEmpty) return fallback;
-    if (impUid == null || impUid.isEmpty) return error;
-    return '$error (imp_uid: $impUid)';
-  } catch (_) {
-    return fallback;
-  }
-}
-
-/// Payment result data.
-///
-/// Two distinct identifiers live here because PortOne (and most PG providers)
-/// expose a merchant-side order id and a PG-side transaction id that are
-/// generated at different points in the flow:
-///
-///   * [merchantUid] — our own order id, generated client-side before payment
-///     is initiated (e.g. `dolpin_<reservationId>_<epoch>`). Always set.
-///   * [impUid]      — PortOne's imp_uid, issued **after** PortOne charges the
-///     card. Null until the PortOne WebView callback fires.
-///
-/// The old single-field `transactionId` conflated the two and made it
-/// impossible for callers to know which identifier to pass to server-side
-/// verification or refund endpoints.
-class PaymentResult {
-  const PaymentResult({
-    required this.merchantUid,
-    this.impUid,
-    this.reservationId,
-    this.roomId,
-    required this.status,
-    required this.amount,
-    required this.currency,
-  });
-
-  final String merchantUid;
-  final String? impUid;
-  final String? reservationId;
-  final String? roomId;
-  final PaymentStatus status;
-  final int amount;
-  final String currency;
-}
-
-/// Parameters for PortOne payment screen
-class PortOnePaymentParams {
-  final String merchantUid;
-  final String pgProvider;
-  final String payMethod;
-  final int amount;
-  final String itemName;
-  final String buyerName;
-  final String buyerTel;
-  final String buyerEmail;
-
-  const PortOnePaymentParams({
-    required this.merchantUid,
-    required this.pgProvider,
-    required this.payMethod,
-    required this.amount,
-    required this.itemName,
-    required this.buyerName,
-    required this.buyerTel,
-    this.buyerEmail = '',
-  });
-}
+export 'payment_models.dart';
 
 /// Abstract payment gateway interface.
 ///
@@ -120,6 +37,11 @@ abstract class PaymentGateway {
 
 /// PortOne (Korea) implementation
 class PortOneGateway implements PaymentGateway {
+  PortOneGateway({PaymentEdgeClient? edgeClient})
+    : _edgeClient = edgeClient ?? PaymentEdgeClient();
+
+  final PaymentEdgeClient _edgeClient;
+
   static String _generateMerchantUid(String reservationId) =>
       'dolpin_${reservationId}_${DateTime.now().millisecondsSinceEpoch}';
 
@@ -184,45 +106,17 @@ class PortOneGateway implements PaymentGateway {
     if (authJwt == null || authJwt.isEmpty) {
       return const Fail(PaymentFailure('Authentication required'));
     }
-    try {
-      final res = await http
-          .post(
-            Uri.parse('${Env.supabaseUrl}/functions/v1/verify-payment'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $authJwt',
-              'apikey': Env.supabaseAnonKey,
-            },
-            body: jsonEncode({'imp_uid': paymentRef}),
-          )
-          .timeout(_paymentTimeout);
-      if (res.statusCode != 200) {
-        return Fail(
-          PaymentFailure(
-            _edgeErrorMessage(
-              res,
-              'Failed to verify payment (${res.statusCode})',
-            ),
-          ),
-        );
-      }
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      return Success(
-        PaymentResult(
-          merchantUid: data['merchant_uid'] as String? ?? '',
-          impUid: data['imp_uid'] as String?,
-          reservationId: data['reservation_id'] as String?,
-          roomId: data['room_id'] as String?,
-          status: PaymentStatus.fromString(data['status'] as String? ?? ''),
-          amount: (data['amount'] as num?)?.toInt() ?? 0,
-          currency: data['currency'] as String? ?? 'KRW',
-        ),
-      );
-    } on TimeoutException {
-      return const Fail(PaymentFailure('Payment verification timed out'));
-    } catch (e) {
-      return Fail(PaymentFailure(e.toString()));
+    final result = await _edgeClient.postJson(
+      functionName: 'verify-payment',
+      authJwt: authJwt,
+      body: {'imp_uid': paymentRef},
+      timeoutMessage: 'Payment verification timed out',
+      failureMessage: 'Failed to verify payment',
+    );
+    if (result.isFailure) {
+      return Fail(result.failure);
     }
+    return Success(PortOnePaymentMapper.fromVerificationJson(result.value));
   }
 
   /// Requests a refund via the `refund-payment` edge function.
@@ -235,34 +129,20 @@ class PortOneGateway implements PaymentGateway {
     if (authJwt == null || authJwt.isEmpty) {
       return const Fail(PaymentFailure('Authentication required'));
     }
-    try {
-      final body = <String, dynamic>{'imp_uid': paymentRef};
-      if (amount != null) body['amount'] = amount;
+    final body = <String, dynamic>{'imp_uid': paymentRef};
+    if (amount != null) body['amount'] = amount;
 
-      final res = await http
-          .post(
-            Uri.parse('${Env.supabaseUrl}/functions/v1/refund-payment'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $authJwt',
-              'apikey': Env.supabaseAnonKey,
-            },
-            body: jsonEncode(body),
-          )
-          .timeout(_paymentTimeout);
-      if (res.statusCode != 200) {
-        return Fail(
-          PaymentFailure(
-            _edgeErrorMessage(res, 'Refund failed (${res.statusCode})'),
-          ),
-        );
-      }
-      return const Success(null);
-    } on TimeoutException {
-      return const Fail(PaymentFailure('Refund request timed out'));
-    } catch (e) {
-      return Fail(PaymentFailure(e.toString()));
+    final result = await _edgeClient.postJson(
+      functionName: 'refund-payment',
+      authJwt: authJwt,
+      body: body,
+      timeoutMessage: 'Refund request timed out',
+      failureMessage: 'Refund failed',
+    );
+    if (result.isFailure) {
+      return Fail(result.failure);
     }
+    return const Success(null);
   }
 }
 
@@ -330,12 +210,17 @@ class StripeGateway implements PaymentGateway {
 
 /// Routes to the correct payment gateway based on currency
 final paymentServiceProvider = Provider<PaymentService>((ref) {
-  return PaymentService();
+  return PaymentService(edgeClient: ref.watch(paymentEdgeClientProvider));
 });
 
 class PaymentService {
+  PaymentService({PaymentEdgeClient? edgeClient})
+    : _edgeClient = edgeClient ?? PaymentEdgeClient();
+
+  final PaymentEdgeClient _edgeClient;
+
   PaymentGateway gatewayForCurrency(String currency) => switch (currency) {
-    'KRW' => PortOneGateway(),
+    'KRW' => PortOneGateway(edgeClient: _edgeClient),
     'IDR' => XenditGateway(),
     _ => StripeGateway(),
   };
@@ -376,31 +261,16 @@ class PaymentService {
     required String reservationId,
     required String authJwt,
   }) async {
-    try {
-      final res = await http
-          .post(
-            Uri.parse('${Env.supabaseUrl}/functions/v1/settle-reservation'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $authJwt',
-              'apikey': Env.supabaseAnonKey,
-            },
-            body: jsonEncode({'reservation_id': reservationId}),
-          )
-          .timeout(_paymentTimeout);
-      if (res.statusCode != 200) {
-        return Fail(
-          PaymentFailure(
-            _edgeErrorMessage(res, 'Settlement failed (${res.statusCode})'),
-          ),
-        );
-      }
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      return Success((data['refunded_amount'] as num?)?.toInt() ?? 0);
-    } on TimeoutException {
-      return const Fail(PaymentFailure('Settlement request timed out'));
-    } catch (e) {
-      return Fail(PaymentFailure(e.toString()));
+    final result = await _edgeClient.postJson(
+      functionName: 'settle-reservation',
+      authJwt: authJwt,
+      body: {'reservation_id': reservationId},
+      timeoutMessage: 'Settlement request timed out',
+      failureMessage: 'Settlement failed',
+    );
+    if (result.isFailure) {
+      return Fail(result.failure);
     }
+    return Success((result.value['refunded_amount'] as num?)?.toInt() ?? 0);
   }
 }
