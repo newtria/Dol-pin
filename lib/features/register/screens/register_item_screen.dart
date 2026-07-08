@@ -6,14 +6,13 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/formatters.dart';
-import '../../../data/datasources/gemini_service.dart';
-import '../../../data/datasources/storage_service.dart';
 import '../../../core/constants/enums.dart';
-import '../../../data/repositories/rental_repository.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/concert_provider.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/dolpin_button.dart';
+import '../application/register_item_controller.dart';
+import '../application/register_item_form_policy.dart';
 import '../widgets/condition_selector.dart';
 import '../widgets/photo_upload.dart';
 
@@ -40,6 +39,7 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
   bool _isLoading = false;
   String? _vlmTag;
   bool _isAutoTagging = false;
+  int _autoTagRequestId = 0;
 
   @override
   void dispose() {
@@ -68,148 +68,90 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
       },
     );
     if (range != null) {
-      final end = range.end.isAfter(range.start)
-          ? range.end
-          : range.start.add(const Duration(days: 1));
+      final availability = RegisterItemCommandFactory.normalizeAvailability(
+        range.start,
+        range.end,
+      );
       setState(
-        () => _availabilityRange = DateTimeRange(start: range.start, end: end),
+        () => _availabilityRange = DateTimeRange(
+          start: availability.start,
+          end: availability.end,
+        ),
       );
     }
   }
 
   Future<void> _autoTag(XFile photo) async {
+    final requestId = ++_autoTagRequestId;
     setState(() => _isAutoTagging = true);
     try {
-      final gemini = ref.read(geminiServiceProvider);
-      final file = File(photo.path);
+      final result = await ref
+          .read(registerItemControllerProvider)
+          .autoTag(File(photo.path));
 
-      // Run tag analysis and category suggestion in parallel
-      final results = await Future.wait([
-        gemini.analyzeItemPhoto(file),
-        gemini.suggestCategory(file),
-      ]);
+      if (!mounted ||
+          requestId != _autoTagRequestId ||
+          _photos.isEmpty ||
+          _photos.first.path != photo.path) {
+        return;
+      }
 
-      if (!mounted) return;
-
-      final tagResult = results[0];
-      final categoryResult = results[1];
-
-      tagResult.when(
-        success: (tag) => setState(() => _vlmTag = tag),
-        failure: (_) {},
-      );
-
-      categoryResult.when(
-        success: (cat) {
-          final suggested = ItemCategory.fromString(cat);
-          setState(() => _category = suggested);
+      result.when(
+        success: (autoTag) {
+          setState(() {
+            _vlmTag = autoTag.tag ?? _vlmTag;
+            _category = autoTag.category ?? _category;
+          });
         },
         failure: (_) {},
       );
     } finally {
-      if (mounted) setState(() => _isAutoTagging = false);
+      if (mounted && requestId == _autoTagRequestId) {
+        setState(() => _isAutoTagging = false);
+      }
     }
   }
 
   Future<void> _submit() async {
     final l = AppLocalizations.of(context)!;
-    if (_photos.length < 2) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l.photosRequired)));
-      return;
-    }
-    final title = _titleController.text.trim();
-    final priceText = _priceController.text.trim();
-    final depositText = _depositController.text.trim();
-    if (title.isEmpty ||
-        priceText.isEmpty ||
-        depositText.isEmpty ||
-        _selectedConcertId == null ||
-        _availabilityRange == null ||
-        _pickupLocationController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l.fillAllFields)));
-      return;
-    }
-
-    final price = int.tryParse(priceText);
-    final deposit = int.tryParse(depositText);
-    if (price == null || deposit == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l.validNumbers)));
-      return;
-    }
-    if (price <= 0 || deposit <= 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l.pricePositiveRequired)));
-      return;
-    }
-
     final userId = ref.read(currentUserIdProvider);
     if (userId == null) return;
+    final buildResult = RegisterItemCommandFactory.build(
+      RegisterItemDraft(
+        userId: userId,
+        photos: _photos.map((photo) => File(photo.path)).toList(),
+        selectedConcertId: _selectedConcertId,
+        category: _category,
+        titleText: _titleController.text,
+        descriptionText: _descController.text,
+        dailyPriceText: _priceController.text,
+        currency: ref.read(currentUserProvider).value?.currency ?? 'KRW',
+        depositText: _depositController.text,
+        conditionGrade: _conditionGrade,
+        pickupMethod: _pickupMethod,
+        pickupLocationText: _pickupLocationController.text,
+        availableFrom: _availabilityRange?.start,
+        availableTo: _availabilityRange?.end,
+        vlmTag: _vlmTag,
+      ),
+    );
+
+    final RegisterItemCommand command;
+    switch (buildResult) {
+      case RegisterItemBuildSuccess(command: final builtCommand):
+        command = builtCommand;
+      case RegisterItemBuildFailure(:final error):
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_validationMessage(l, error))));
+        return;
+    }
 
     setState(() => _isLoading = true);
     try {
-      // Upload photos in parallel
-      final storage = ref.read(storageServiceProvider);
-      final uploadResults = await Future.wait(
-        _photos.map(
-          (photo) => storage.uploadItemPhoto(userId, File(photo.path)),
-        ),
-      );
-
-      // Check for upload failures
-      final photoUrls = <String>[];
-      for (final result in uploadResults) {
-        if (result.isFailure) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(l.errorPrefix(result.failure.message))),
-            );
-          }
-          return;
-        }
-        photoUrls.add(result.value);
-      }
-
-      // Auto-tag via Gemini VLM if not already tagged
-      String? vlmTag = _vlmTag;
-      if (vlmTag == null && photoUrls.isNotEmpty) {
-        final gemini = ref.read(geminiServiceProvider);
-        final tagResult = await gemini.analyzeItemPhoto(
-          File(_photos.first.path),
-        );
-        tagResult.when(success: (tag) => vlmTag = tag, failure: (_) {});
-      }
-
-      // Create item
-      final result = await ref.read(rentalRepositoryProvider).create({
-        'lender_id': userId,
-        'concert_id': _selectedConcertId,
-        'category': _category.name,
-        'title': title,
-        'description': _descController.text.trim(),
-        'photos': photoUrls,
-        'daily_price': price,
-        'currency': ref.read(currentUserProvider).value?.currency ?? 'KRW',
-        'deposit': deposit,
-        'condition_grade': _conditionGrade,
-        'pickup_method': _pickupMethod.name,
-        'pickup_location': {'label': _pickupLocationController.text.trim()},
-        'available_from': _availabilityRange!.start
-            .toIso8601String()
-            .split('T')
-            .first,
-        'available_to': _availabilityRange!.end
-            .toIso8601String()
-            .split('T')
-            .first,
-        'vlm_tag': vlmTag,
-      });
+      final result = await ref
+          .read(registerItemControllerProvider)
+          .createItem(command);
 
       if (!mounted) return;
       result.when(
@@ -270,7 +212,11 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
                   unawaited(_autoTag(_photos.first));
                 }
                 if (_photos.isEmpty) {
-                  setState(() => _vlmTag = null);
+                  _autoTagRequestId++;
+                  setState(() {
+                    _vlmTag = null;
+                    _isAutoTagging = false;
+                  });
                 }
               },
             ),
@@ -496,5 +442,18 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
         color: AppColors.textPrimary,
       ),
     );
+  }
+
+  String _validationMessage(
+    AppLocalizations l,
+    RegisterItemValidationError error,
+  ) {
+    return switch (error) {
+      RegisterItemValidationError.photosRequired => l.photosRequired,
+      RegisterItemValidationError.fillAllFields => l.fillAllFields,
+      RegisterItemValidationError.validNumbers => l.validNumbers,
+      RegisterItemValidationError.pricePositiveRequired =>
+        l.pricePositiveRequired,
+    };
   }
 }

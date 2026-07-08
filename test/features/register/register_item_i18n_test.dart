@@ -5,10 +5,14 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('register item localization', () {
     late String registerScreen;
+    late String registerPolicy;
 
     setUpAll(() {
       registerScreen = File(
         'lib/features/register/screens/register_item_screen.dart',
+      ).readAsStringSync();
+      registerPolicy = File(
+        'lib/features/register/application/register_item_form_policy.dart',
       ).readAsStringSync();
     });
 
@@ -27,10 +31,7 @@ void main() {
     test(
       'normalizes same-day availability to the exclusive return-date model',
       () {
-        expect(
-          registerScreen,
-          contains("range.start.add(const Duration(days: 1))"),
-        );
+        expect(registerPolicy, contains("start.add(const Duration(days: 1))"));
         expect(registerScreen, contains('DateTimeRange('));
       },
     );
