@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -8,15 +9,15 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/enums.dart';
 import '../../../core/errors/result.dart';
-import '../../../core/utils/formatters.dart';
 import '../../../data/models/reservation_model.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/reservation_provider.dart';
-import '../../../shared/widgets/dolpin_button.dart';
 import '../../../shared/widgets/error_view.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../application/reservation_action_controller.dart';
+import '../application/reservation_detail_action_presenter.dart';
+import '../widgets/reservation_detail_sections.dart';
 
 class ReservationDetailScreen extends ConsumerWidget {
   const ReservationDetailScreen({super.key, required this.reservationId});
@@ -251,7 +252,6 @@ class _ReservationDetailBodyState
   @override
   Widget build(BuildContext context) {
     final userId = ref.watch(currentUserIdProvider);
-    final l = AppLocalizations.of(context)!;
     final status = ReservationStatus.fromString(reservation.status);
     final isBorrower = userId == reservation.borrowerId;
     final isLender = userId == reservation.lenderId;
@@ -263,182 +263,69 @@ class _ReservationDetailBodyState
         : ref
               .read(reservationActionControllerProvider)
               .legalNextStates(reservation: reservation, userId: userId);
+    final actions = ReservationActionPresenter.actionsFor(
+      reservation: reservation,
+      status: status,
+      legalTargets: legalTargets,
+      isBorrower: isBorrower,
+      isLender: isLender,
+      canOpenChat: userId != null && canOpenChat,
+    );
 
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        _StatusHeader(status: status),
+        ReservationStatusHeader(status: status),
         const SizedBox(height: 20),
-        _InfoRow(
-          label: l.selectRentalDates,
-          value: DateFormatter.rentalPeriod(
-            reservation.rentalDate,
-            reservation.returnDate,
-          ),
-        ),
-        _InfoRow(
-          label: l.total,
-          value: CurrencyFormatter.format(
-            reservation.totalPaid,
-            reservation.currency,
-          ),
-        ),
-        _InfoRow(label: l.reservationId, value: reservation.id),
-        if (reservation.paymentId != null)
-          _InfoRow(label: l.paymentId, value: reservation.paymentId!),
+        ReservationDetailsSummary(reservation: reservation),
         const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: _isBusy || userId == null || !canOpenChat
-              ? null
-              : _openChat,
-          icon: const Icon(Icons.chat_bubble_outline),
-          label: Text(l.openChat),
+        ReservationActionButtons(
+          isBusy: _isBusy,
+          actions: actions,
+          onAction: _handleAction,
         ),
-        const SizedBox(height: 24),
-        if (legalTargets.contains(ReservationStatus.cancelled) &&
-            status == ReservationStatus.pending)
-          DolpinButton(
-            label: l.cancel,
-            isLoading: _isBusy,
-            onPressed: () => _runAction(
-              () => ref
-                  .read(reservationActionControllerProvider)
-                  .cancel(reservation.id),
-              successMessage: l.reservationCancelled,
-            ),
-          ),
-        if (status == ReservationStatus.paid && isLender)
-          DolpinButton(
-            label: l.confirmPickup,
-            isLoading: _isBusy,
-            onPressed: () => _runAction(
-              () => ref
-                  .read(reservationActionControllerProvider)
-                  .confirmPickup(reservation.id),
-              successMessage: l.pickupConfirmed,
-            ),
-          ),
-        if (status == ReservationStatus.paid &&
-            reservation.paymentId != null &&
-            (isBorrower || isLender))
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: OutlinedButton(
-              onPressed: _isBusy ? null : _refundPaid,
-              child: Text(l.cancelAndRefund),
-            ),
-          ),
-        if (status == ReservationStatus.pickedUp && isBorrower)
-          DolpinButton(
-            label: l.confirmReturn,
-            isLoading: _isBusy,
-            onPressed: _confirmReturn,
-          ),
-        if (status == ReservationStatus.returned && isLender)
-          DolpinButton(
-            label: l.settleDeposit,
-            isLoading: _isBusy,
-            onPressed: _settle,
-          ),
-        if (legalTargets.contains(ReservationStatus.disputed))
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: OutlinedButton(
-              onPressed: _isBusy ? null : _dispute,
-              child: Text(l.openDispute),
-            ),
-          ),
       ],
     );
   }
-}
 
-class _StatusHeader extends StatelessWidget {
-  const _StatusHeader({required this.status});
-
-  final ReservationStatus status;
-
-  @override
-  Widget build(BuildContext context) {
+  void _handleAction(ReservationDetailActionType action) {
     final l = AppLocalizations.of(context)!;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceLight,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(_iconFor(status), color: _colorFor(status), size: 32),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              status.localizedLabel(l),
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+    switch (action) {
+      case ReservationDetailActionType.openChat:
+        unawaited(_openChat());
+        break;
+      case ReservationDetailActionType.cancel:
+        unawaited(
+          _runAction(
+            () => ref
+                .read(reservationActionControllerProvider)
+                .cancel(reservation.id),
+            successMessage: l.reservationCancelled,
           ),
-        ],
-      ),
-    );
-  }
-
-  IconData _iconFor(ReservationStatus status) => switch (status) {
-    ReservationStatus.pending => Icons.schedule,
-    ReservationStatus.paid => Icons.check_circle_outline,
-    ReservationStatus.pickedUp => Icons.inventory_2,
-    ReservationStatus.returned => Icons.assignment_return,
-    ReservationStatus.settled || ReservationStatus.resolved => Icons.done_all,
-    ReservationStatus.cancelled => Icons.cancel_outlined,
-    ReservationStatus.disputed => Icons.report_problem_outlined,
-  };
-
-  Color _colorFor(ReservationStatus status) => switch (status) {
-    ReservationStatus.pending => AppColors.warning,
-    ReservationStatus.paid => AppColors.accent,
-    ReservationStatus.pickedUp => AppColors.primary,
-    ReservationStatus.returned => AppColors.success,
-    ReservationStatus.settled ||
-    ReservationStatus.resolved => AppColors.success,
-    ReservationStatus.cancelled => AppColors.error,
-    ReservationStatus.disputed => AppColors.warning,
-  };
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 128,
-            child: Text(
-              label,
-              style: const TextStyle(color: AppColors.textSecondary),
-            ),
+        );
+        break;
+      case ReservationDetailActionType.confirmPickup:
+        unawaited(
+          _runAction(
+            () => ref
+                .read(reservationActionControllerProvider)
+                .confirmPickup(reservation.id),
+            successMessage: l.pickupConfirmed,
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+        );
+        break;
+      case ReservationDetailActionType.refundPaid:
+        unawaited(_refundPaid());
+        break;
+      case ReservationDetailActionType.confirmReturn:
+        unawaited(_confirmReturn());
+        break;
+      case ReservationDetailActionType.settle:
+        unawaited(_settle());
+        break;
+      case ReservationDetailActionType.dispute:
+        unawaited(_dispute());
+        break;
+    }
   }
 }

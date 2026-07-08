@@ -14,6 +14,30 @@ void main() {
       expect(ReservationCheckoutPolicy.rentalDays(start, end), 1);
     });
 
+    test('normalizes same-day checkout selections', () {
+      final selection = ReservationCheckoutPolicy.normalizeSelection(
+        DateTime(2026, 6, 23),
+        DateTime(2026, 6, 23),
+      );
+
+      expect(selection.rentalDate, DateTime(2026, 6, 23));
+      expect(selection.returnDate, DateTime(2026, 6, 24));
+    });
+
+    test('builds checkout quote totals', () {
+      final quote = ReservationCheckoutPolicy.quote(
+        item: _item(dailyPrice: 1000, deposit: 5000),
+        rentalDate: DateTime(2026, 6, 23),
+        returnDate: DateTime(2026, 6, 25),
+      );
+
+      expect(quote.days, 2);
+      expect(quote.rentalFee, 2000);
+      expect(quote.deposit, 5000);
+      expect(quote.total, 7000);
+      expect(quote.validationError, isNull);
+    });
+
     test('checks item availability boundaries', () {
       final item = _item(
         availableFrom: DateTime(2026, 6, 20),
@@ -43,6 +67,31 @@ void main() {
           returnDate: DateTime(2026, 7, 1),
         ),
         isFalse,
+      );
+    });
+
+    test('quote carries checkout validation failures', () {
+      final unavailableQuote = ReservationCheckoutPolicy.quote(
+        item: _item(
+          availableFrom: DateTime(2026, 6, 20),
+          availableTo: DateTime(2026, 6, 30),
+        ),
+        rentalDate: DateTime(2026, 6, 23),
+        returnDate: DateTime(2026, 7, 1),
+      );
+      final currencyQuote = ReservationCheckoutPolicy.quote(
+        item: _item(currency: 'JPY'),
+        rentalDate: DateTime(2026, 6, 23),
+        returnDate: DateTime(2026, 6, 24),
+      );
+
+      expect(
+        unavailableQuote.validationError,
+        ReservationCheckoutValidationError.datesOutsideAvailability,
+      );
+      expect(
+        currencyQuote.validationError,
+        ReservationCheckoutValidationError.paymentNotConfigured,
       );
     });
 
@@ -113,16 +162,22 @@ void main() {
   });
 }
 
-RentalItemModel _item({DateTime? availableFrom, DateTime? availableTo}) {
+RentalItemModel _item({
+  DateTime? availableFrom,
+  DateTime? availableTo,
+  int dailyPrice = 1000,
+  int deposit = 5000,
+  String currency = 'KRW',
+}) {
   return RentalItemModel(
     id: 'item-1',
     lenderId: 'lender-1',
     category: 'lightstick',
     title: 'Lightstick',
     photos: const [],
-    dailyPrice: 1000,
-    currency: 'KRW',
-    deposit: 5000,
+    dailyPrice: dailyPrice,
+    currency: currency,
+    deposit: deposit,
     pickupMethod: 'direct',
     availableFrom: availableFrom,
     availableTo: availableTo,

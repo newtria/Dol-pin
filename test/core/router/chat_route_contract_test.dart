@@ -8,6 +8,7 @@ void main() {
     late String chatList;
     late String reservationScreen;
     late String reservationDetail;
+    late String reservationDetailSections;
 
     setUpAll(() {
       router = File('lib/core/router/app_router.dart').readAsStringSync();
@@ -19,6 +20,9 @@ void main() {
       ).readAsStringSync();
       reservationDetail = File(
         'lib/features/reservation/screens/reservation_detail_screen.dart',
+      ).readAsStringSync();
+      reservationDetailSections = File(
+        'lib/features/reservation/widgets/reservation_detail_sections.dart',
       ).readAsStringSync();
     });
 
@@ -44,7 +48,11 @@ void main() {
       expect(reservationDetail, contains('canOpenChat'));
       expect(
         reservationDetail,
-        contains('_isBusy || userId == null || !canOpenChat'),
+        contains('canOpenChat: userId != null && canOpenChat'),
+      );
+      expect(
+        reservationDetailSections,
+        contains('final onPressed = isBusy || !action.enabled'),
       );
     });
 

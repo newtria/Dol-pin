@@ -4,13 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../data/models/rental_item_model.dart';
-import '../../../core/errors/result.dart';
-import '../../../data/models/user_model.dart';
-import '../../../data/models/reservation_model.dart';
-import '../../../data/datasources/supabase_client.dart';
-import '../../../data/repositories/chat_repository.dart';
-import '../../../data/repositories/auth_repository.dart';
-import '../../../data/repositories/reservation_repository.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/rental_provider.dart';
@@ -57,11 +50,15 @@ class _ReservationBodyState extends ConsumerState<_ReservationBody> {
   DateTimeRange? _dateRange;
   bool _isLoading = false;
 
-  int get _days => _dateRange != null
-      ? ReservationCheckoutPolicy.rentalDays(_dateRange!.start, _dateRange!.end)
-      : 0;
-  int get _rentalFee => widget.item.dailyPrice * _days;
-  int get _total => _rentalFee + widget.item.deposit;
+  ReservationCheckoutQuote? get _quote {
+    final dateRange = _dateRange;
+    if (dateRange == null) return null;
+    return ReservationCheckoutPolicy.quote(
+      item: widget.item,
+      rentalDate: dateRange.start,
+      returnDate: dateRange.end,
+    );
+  }
 
   Future<void> _selectDates() async {
     final range = await showDateRangePicker(
@@ -80,23 +77,27 @@ class _ReservationBodyState extends ConsumerState<_ReservationBody> {
       },
     );
     if (range != null) {
-      final end = range.end.isAfter(range.start)
-          ? range.end
-          : range.start.add(const Duration(days: 1));
-      setState(() => _dateRange = DateTimeRange(start: range.start, end: end));
+      final selection = ReservationCheckoutPolicy.normalizeSelection(
+        range.start,
+        range.end,
+      );
+      setState(
+        () => _dateRange = DateTimeRange(
+          start: selection.rentalDate,
+          end: selection.returnDate,
+        ),
+      );
     }
   }
 
   Future<void> _proceed() async {
-    if (_dateRange == null) return;
+    final quote = _quote;
+    if (quote == null) return;
 
     final l = AppLocalizations.of(context)!;
     final item = widget.item;
-    if (!ReservationCheckoutPolicy.isWithinAvailability(
-      item: item,
-      rentalDate: _dateRange!.start,
-      returnDate: _dateRange!.end,
-    )) {
+    if (quote.validationError ==
+        ReservationCheckoutValidationError.datesOutsideAvailability) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(l.datesOutsideAvailability)));
@@ -105,9 +106,8 @@ class _ReservationBodyState extends ConsumerState<_ReservationBody> {
 
     final userId = ref.read(currentUserIdProvider);
     if (userId == null) return;
-    if (!ReservationCheckoutPolicy.isCheckoutCurrencyConfigured(
-      item.currency,
-    )) {
+    if (quote.validationError ==
+        ReservationCheckoutValidationError.paymentNotConfigured) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l.paymentNotConfigured(item.currency))),
       );
@@ -116,166 +116,100 @@ class _ReservationBodyState extends ConsumerState<_ReservationBody> {
 
     setState(() => _isLoading = true);
     try {
-      final results = await Future.wait([
-        ref
-            .read(reservationRepositoryProvider)
-            .createIntent(
-              itemId: item.id,
-              rentalDate: _dateRange!.start,
-              returnDate: _dateRange!.end,
-            ),
-        ref.read(authRepositoryProvider).getProfile(item.lenderId),
-      ]);
-
+      final userProfile = ref.read(currentUserProvider).valueOrNull;
+      final attemptResult = await ref
+          .read(reservationCheckoutControllerProvider)
+          .startPortOneCheckout(
+            item: item,
+            rentalDate: quote.selection.rentalDate,
+            returnDate: quote.selection.returnDate,
+            buyerName: userProfile?.nickname ?? l.guest,
+            buyerTel: userProfile?.phone ?? '',
+            fallbackLenderName: l.guest,
+          );
       if (!mounted) return;
-      final reservationResult = results[0];
-      final profileResult = results[1] as Result<UserModel?>;
-
-      if (reservationResult.isFailure) {
+      if (attemptResult.isFailure) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '${AppLocalizations.of(context)!.reservationFailed}: ${reservationResult.failure.message}',
+              '${l.reservationFailed}: ${attemptResult.failure.message}',
             ),
           ),
         );
         return;
       }
 
-      final lenderName = profileResult.when(
-        success: (user) => user?.nickname ?? l.guest,
-        failure: (_) => l.guest,
+      final attempt = attemptResult.value;
+      final paymentResult = await Navigator.push<PaymentResult>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PaymentScreen(params: attempt.paymentParams),
+        ),
       );
-      final reservation = reservationResult.value as ReservationModel;
+      if (!mounted) return;
 
-      // Navigate to payment screen (KRW only for now)
-      if (item.currency == 'KRW') {
-        final gateway =
-            ref.read(paymentServiceProvider).gatewayForCurrency('KRW')
-                as PortOneGateway;
-        final userProfile = ref.read(currentUserProvider).valueOrNull;
-        final params = gateway.buildParams(
-          reservationId: reservation.id,
-          amount: reservation.totalPaid,
-          itemName: item.title,
-          buyerName: userProfile?.nickname ?? l.guest,
-          buyerTel: userProfile?.phone ?? '',
-        );
-        final attemptResult = await ref
-            .read(reservationRepositoryProvider)
-            .startPaymentAttempt(
-              reservationId: reservation.id,
-              merchantUid: params.merchantUid,
-            );
-        if (attemptResult.isFailure) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(attemptResult.failure.message)),
+      final completionResult = await ref
+          .read(reservationCheckoutControllerProvider)
+          .completePortOneCheckout(
+            attempt: attempt,
+            paymentResult: paymentResult,
+            currentUserId: userId,
           );
-          return;
-        }
-
-        if (!mounted) return;
-        final paymentResult = await Navigator.push<PaymentResult>(
-          context,
-          MaterialPageRoute(builder: (_) => PaymentScreen(params: params)),
-        );
-
-        if (!mounted) return;
-        if (paymentResult == null ||
-            paymentResult.status != PaymentStatus.success) {
-          await ref.read(reservationRepositoryProvider).cancel(reservation.id);
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context)!.reservationFailed),
-            ),
-          );
-          return;
-        }
-        final impUid = paymentResult.impUid;
-        if (impUid == null || impUid.isEmpty) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(l.paymentVerificationFailed)));
-          context.goNamed(
-            'reservationDetail',
-            pathParameters: {'id': reservation.id},
-          );
-          return;
-        }
-
-        final authJwt = ref
-            .read(supabaseProvider)
-            .auth
-            .currentSession
-            ?.accessToken;
-        final verificationResult = await const PaymentVerificationRetrier()
-            .verify(gateway: gateway, paymentRef: impUid, authJwt: authJwt);
-        if (!mounted) return;
-        if (verificationResult.isFailure ||
-            verificationResult.value.status != PaymentStatus.success) {
-          if (verificationResult.isFailure) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(verificationResult.failure.message)),
-            );
-            context.goNamed(
-              'reservationDetail',
-              pathParameters: {'id': reservation.id},
-            );
-            return;
-          }
-          if (verificationResult.value.status != PaymentStatus.success) {
-            await ref
-                .read(reservationRepositoryProvider)
-                .cancel(reservation.id);
-          }
-          if (!mounted) return;
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(l.paymentVerificationFailed)));
-          return;
-        }
-
-        var roomId = verificationResult.value.roomId;
-        if (roomId == null || roomId.isEmpty) {
-          final roomResult = await ref
-              .read(chatRepositoryProvider)
-              .getOrCreateRoom(
-                userId,
-                item.lenderId,
-                itemId: item.id,
-                reservationId: reservation.id,
-              );
-          if (roomResult.isSuccess) {
-            roomId = roomResult.value;
-          }
-        }
-
-        if (!mounted) return;
-        if (roomId == null || roomId.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l.chatWillBeAvailableAfterConfirmation)),
-          );
-          context.goNamed(
-            'reservationDetail',
-            pathParameters: {'id': reservation.id},
-          );
-          return;
-        }
-
+      if (!mounted) return;
+      if (completionResult.isFailure) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.reservationCreated),
-            backgroundColor: AppColors.success,
+            content: Text(
+              '${l.reservationFailed}: ${completionResult.failure.message}',
+            ),
           ),
         );
-        context.pushReplacementNamed(
-          'chatRoom',
-          pathParameters: {'roomId': roomId, 'userId': item.lenderId},
-          queryParameters: {'name': lenderName},
-        );
         return;
+      }
+
+      final completion = completionResult.value;
+      final failure = completion.failure;
+      if (failure != null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(failure.message)));
+      }
+
+      switch (completion.nextStep) {
+        case CheckoutNextStep.chat:
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(l.reservationCreated),
+              backgroundColor: AppColors.success,
+            ),
+          );
+          context.pushReplacementNamed(
+            'chatRoom',
+            pathParameters: {
+              'roomId': completion.roomId!,
+              'userId': completion.lenderId,
+            },
+            queryParameters: {'name': completion.lenderName},
+          );
+          break;
+        case CheckoutNextStep.reservationDetail:
+          if (failure == null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(l.chatWillBeAvailableAfterConfirmation)),
+            );
+          }
+          context.goNamed(
+            'reservationDetail',
+            pathParameters: {'id': completion.reservationId},
+          );
+          break;
+        case CheckoutNextStep.stay:
+          if (failure == null) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(l.reservationFailed)));
+          }
+          break;
       }
     } catch (e) {
       if (mounted) {
@@ -297,6 +231,10 @@ class _ReservationBodyState extends ConsumerState<_ReservationBody> {
     final l = AppLocalizations.of(context)!;
     final item = widget.item;
     final currency = item.currency;
+    final quote = _quote;
+    final days = quote?.days ?? 0;
+    final rentalFee = quote?.rentalFee ?? 0;
+    final total = quote?.total ?? item.deposit;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -373,7 +311,7 @@ class _ReservationBodyState extends ConsumerState<_ReservationBody> {
                   const Spacer(),
                   if (_dateRange != null)
                     Text(
-                      l.dayCount(_days),
+                      l.dayCount(days),
                       style: const TextStyle(color: AppColors.primary),
                     ),
                 ],
@@ -389,9 +327,9 @@ class _ReservationBodyState extends ConsumerState<_ReservationBody> {
           _PriceRow(
             label: l.rentalFeeLabel(
               CurrencyFormatter.format(item.dailyPrice, currency),
-              _days,
+              days,
             ),
-            value: CurrencyFormatter.format(_rentalFee, currency),
+            value: CurrencyFormatter.format(rentalFee, currency),
           ),
           const SizedBox(height: 8),
           _PriceRow(
@@ -404,7 +342,7 @@ class _ReservationBodyState extends ConsumerState<_ReservationBody> {
           ),
           _PriceRow(
             label: l.total,
-            value: CurrencyFormatter.format(_total, currency),
+            value: CurrencyFormatter.format(total, currency),
             isBold: true,
           ),
           const SizedBox(height: 24),

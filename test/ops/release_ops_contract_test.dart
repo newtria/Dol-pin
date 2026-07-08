@@ -14,7 +14,7 @@ void main() {
     late String supabaseConfig;
     late String ciWorkflow;
     late String publicProfilesMigration;
-    late String reservationScreen;
+    late String reservationCheckoutController;
 
     setUpAll(() {
       preflight = File('scripts/release-preflight.mjs').readAsStringSync();
@@ -25,7 +25,7 @@ void main() {
       ).readAsStringSync();
       resolveDispute = File(
         'supabase/functions/resolve-dispute/index.ts',
-      ).readAsStringSync();
+      ).readAsStringSync()._quoteNormalized();
       envExample = File('.env.example').readAsStringSync();
       readme = File('README.md').readAsStringSync();
       supabaseConfig = File('supabase/config.toml').readAsStringSync();
@@ -33,8 +33,8 @@ void main() {
       publicProfilesMigration = File(
         'supabase/migrations/018_public_user_profiles.sql',
       ).readAsStringSync();
-      reservationScreen = File(
-        'lib/features/reservation/screens/reservation_screen.dart',
+      reservationCheckoutController = File(
+        'lib/features/reservation/application/reservation_checkout_controller.dart',
       ).readAsStringSync();
     });
 
@@ -106,13 +106,23 @@ void main() {
       'successful payment callback without provider id does not cancel hold',
       () {
         expect(
-          reservationScreen,
+          reservationCheckoutController,
           contains('paymentResult.status != PaymentStatus.success'),
         );
-        expect(reservationScreen, contains('impUid == null || impUid.isEmpty'));
-        final missingImpUidBranch = reservationScreen.substring(
-          reservationScreen.indexOf('impUid == null || impUid.isEmpty'),
-          reservationScreen.indexOf('final authJwt ='),
+        expect(
+          reservationCheckoutController,
+          contains('impUid == null || impUid.isEmpty'),
+        );
+        final missingImpUidBranch = reservationCheckoutController.substring(
+          reservationCheckoutController.indexOf(
+            'impUid == null || impUid.isEmpty',
+          ),
+          reservationCheckoutController.indexOf(
+            'final gateway =',
+            reservationCheckoutController.indexOf(
+              'impUid == null || impUid.isEmpty',
+            ),
+          ),
         );
         expect(missingImpUidBranch, isNot(contains('.cancel(reservation.id)')));
       },
@@ -170,4 +180,8 @@ void main() {
       expect(readme, isNot(contains('Phase 1: Korea + Indonesia + Japan')));
     });
   });
+}
+
+extension on String {
+  String _quoteNormalized() => replaceAll('"', "'");
 }
