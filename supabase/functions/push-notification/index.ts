@@ -19,204 +19,190 @@
 //     their own reservations. This is the only legitimate use case in the
 //     app and matches the chat-room access pattern.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { create, getNumericDate } from 'https://deno.land/x/djwt@v3.0.2/mod.ts'
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { create, getNumericDate } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
+import { requireAuthenticatedUser } from "../_shared/auth.ts";
+import {
+  jsonResponse,
+  optionsResponse,
+  parseJsonBody,
+} from "../_shared/http.ts";
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const FCM_PROJECT_ID = Deno.env.get('FCM_PROJECT_ID')!
-const FCM_SERVICE_ACCOUNT_JSON = Deno.env.get('FCM_SERVICE_ACCOUNT_JSON')!
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const FCM_PROJECT_ID = Deno.env.get("FCM_PROJECT_ID")!;
+const FCM_SERVICE_ACCOUNT_JSON = Deno.env.get("FCM_SERVICE_ACCOUNT_JSON")!;
 
 interface PushPayload {
-  reservationId: string
-  receiverId: string
-  title: string
-  body: string
-  data?: Record<string, string>
+  reservationId: string;
+  receiverId: string;
+  title: string;
+  body: string;
+  data?: Record<string, string>;
 }
 
 interface ServiceAccount {
-  client_email: string
-  private_key: string
-  token_uri: string
+  client_email: string;
+  private_key: string;
+  token_uri: string;
 }
 
 // ---------------------------------------------------------------------------
 // OAuth2 access token (cached in module scope while the worker is warm)
 // ---------------------------------------------------------------------------
 
-let cachedToken: { value: string; expiresAt: number } | null = null
+let cachedToken: { value: string; expiresAt: number } | null = null;
 
 function decodeServiceAccount(): ServiceAccount {
   // Allow either raw JSON or base64-wrapped JSON in the secret.
-  const raw = FCM_SERVICE_ACCOUNT_JSON.trim()
-  const json = raw.startsWith('{') ? raw : new TextDecoder().decode(
+  const raw = FCM_SERVICE_ACCOUNT_JSON.trim();
+  const json = raw.startsWith("{") ? raw : new TextDecoder().decode(
     Uint8Array.from(atob(raw), (c) => c.charCodeAt(0)),
-  )
-  return JSON.parse(json) as ServiceAccount
+  );
+  return JSON.parse(json) as ServiceAccount;
 }
 
 async function importPrivateKey(pem: string): Promise<CryptoKey> {
   const cleaned = pem
-    .replace(/-----BEGIN PRIVATE KEY-----/, '')
-    .replace(/-----END PRIVATE KEY-----/, '')
-    .replace(/\s+/g, '')
-  const der = Uint8Array.from(atob(cleaned), (c) => c.charCodeAt(0))
+    .replace(/-----BEGIN PRIVATE KEY-----/, "")
+    .replace(/-----END PRIVATE KEY-----/, "")
+    .replace(/\s+/g, "");
+  const der = Uint8Array.from(atob(cleaned), (c) => c.charCodeAt(0));
   return crypto.subtle.importKey(
-    'pkcs8',
+    "pkcs8",
     der,
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
     false,
-    ['sign'],
-  )
+    ["sign"],
+  );
 }
 
 async function getAccessToken(): Promise<string> {
-  const now = Date.now()
+  const now = Date.now();
   if (cachedToken && cachedToken.expiresAt - 60_000 > now) {
-    return cachedToken.value
+    return cachedToken.value;
   }
 
-  const sa = decodeServiceAccount()
-  const key = await importPrivateKey(sa.private_key)
+  const sa = decodeServiceAccount();
+  const key = await importPrivateKey(sa.private_key);
 
   const jwt = await create(
-    { alg: 'RS256', typ: 'JWT' },
+    { alg: "RS256", typ: "JWT" },
     {
       iss: sa.client_email,
-      scope: 'https://www.googleapis.com/auth/firebase.messaging',
+      scope: "https://www.googleapis.com/auth/firebase.messaging",
       aud: sa.token_uri,
       iat: getNumericDate(0),
       exp: getNumericDate(60 * 60),
     },
     key,
-  )
+  );
 
   const res = await fetch(sa.token_uri, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
       assertion: jwt,
     }),
-  })
+  });
 
   if (!res.ok) {
-    throw new Error(`token exchange failed: ${res.status}`)
+    throw new Error(`token exchange failed: ${res.status}`);
   }
 
-  const body = (await res.json()) as { access_token: string; expires_in: number }
+  const body = (await res.json()) as {
+    access_token: string;
+    expires_in: number;
+  };
   cachedToken = {
     value: body.access_token,
     expiresAt: Date.now() + body.expires_in * 1000,
-  }
-  return body.access_token
+  };
+  return body.access_token;
 }
 
 // ---------------------------------------------------------------------------
 // Request handler
 // ---------------------------------------------------------------------------
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
-
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
-}
-
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+  if (req.method === "OPTIONS") {
+    return optionsResponse();
   }
-  if (req.method !== 'POST') {
-    return jsonResponse(405, { error: 'Method not allowed' })
-  }
-
-  const authHeader = req.headers.get('Authorization') ?? ''
-  if (!authHeader.toLowerCase().startsWith('bearer ')) {
-    return jsonResponse(401, { error: 'Missing bearer token' })
-  }
-  const callerJwt = authHeader.slice('Bearer '.length).trim()
-  if (!callerJwt) {
-    return jsonResponse(401, { error: 'Empty bearer token' })
+  if (req.method !== "POST") {
+    return jsonResponse(405, { error: "Method not allowed" });
   }
 
-  // Resolve caller via the platform anon-key client *with* the user's JWT
-  // attached. Supabase will validate the token signature and surface the
-  // authenticated user via auth.getUser(); a forged token returns null here.
-  const callerClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${callerJwt}` } },
-  })
+  const caller = await requireAuthenticatedUser(
+    req,
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY,
+  );
+  if (caller instanceof Response) return caller;
+  const callerId = caller.id;
 
-  const { data: userData, error: userError } = await callerClient.auth.getUser(callerJwt)
-  if (userError || !userData?.user) {
-    return jsonResponse(401, { error: 'Invalid token' })
-  }
-  const callerId = userData.user.id
+  const payload = await parseJsonBody<PushPayload>(req);
+  if (payload instanceof Response) return payload;
 
-  let payload: PushPayload
-  try {
-    payload = (await req.json()) as PushPayload
-  } catch {
-    return jsonResponse(400, { error: 'Invalid JSON body' })
-  }
-
-  if (!payload.reservationId || !payload.receiverId || !payload.title || !payload.body) {
-    return jsonResponse(400, { error: 'Missing required fields' })
+  if (
+    !payload.reservationId || !payload.receiverId || !payload.title ||
+    !payload.body
+  ) {
+    return jsonResponse(400, { error: "Missing required fields" });
   }
 
   // Service-role client for trusted DB reads (token verification + FCM lookup).
-  const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   // Authorize: caller must be a participant of the reservation, and the
   // declared receiver must be the *other* participant of the same reservation.
   const { data: reservation, error: resError } = await adminClient
-    .from('reservations')
-    .select('id, lender_id, borrower_id')
-    .eq('id', payload.reservationId)
-    .single()
+    .from("reservations")
+    .select("id, lender_id, borrower_id")
+    .eq("id", payload.reservationId)
+    .single();
 
   if (resError || !reservation) {
-    return jsonResponse(404, { error: 'Reservation not found' })
+    return jsonResponse(404, { error: "Reservation not found" });
   }
 
-  const isCallerParticipant =
-    reservation.lender_id === callerId || reservation.borrower_id === callerId
+  const isCallerParticipant = reservation.lender_id === callerId ||
+    reservation.borrower_id === callerId;
   if (!isCallerParticipant) {
-    return jsonResponse(403, { error: 'Not a participant of this reservation' })
+    return jsonResponse(403, {
+      error: "Not a participant of this reservation",
+    });
   }
 
-  const expectedReceiver =
-    reservation.lender_id === callerId ? reservation.borrower_id : reservation.lender_id
+  const expectedReceiver = reservation.lender_id === callerId
+    ? reservation.borrower_id
+    : reservation.lender_id;
   if (expectedReceiver !== payload.receiverId) {
-    return jsonResponse(403, { error: 'receiverId does not match the reservation counter-party' })
+    return jsonResponse(403, {
+      error: "receiverId does not match the reservation counter-party",
+    });
   }
 
   const { data: receiverRow } = await adminClient
-    .from('users')
-    .select('fcm_token')
-    .eq('id', payload.receiverId)
-    .single()
+    .from("users")
+    .select("fcm_token")
+    .eq("id", payload.receiverId)
+    .single();
 
   if (!receiverRow?.fcm_token) {
-    return jsonResponse(404, { error: 'Receiver has no FCM token registered' })
+    return jsonResponse(404, { error: "Receiver has no FCM token registered" });
   }
 
   // FCM HTTP v1
-  const accessToken = await getAccessToken()
+  const accessToken = await getAccessToken();
   const fcmRes = await fetch(
     `https://fcm.googleapis.com/v1/projects/${FCM_PROJECT_ID}/messages:send`,
     {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         message: {
@@ -226,14 +212,17 @@ Deno.serve(async (req) => {
         },
       }),
     },
-  )
+  );
 
   if (!fcmRes.ok) {
-    const text = await fcmRes.text()
-    console.error('FCM send failed', fcmRes.status, text)
-    return jsonResponse(502, { error: 'FCM send failed', status: fcmRes.status })
+    const text = await fcmRes.text();
+    console.error("FCM send failed", fcmRes.status, text);
+    return jsonResponse(502, {
+      error: "FCM send failed",
+      status: fcmRes.status,
+    });
   }
 
-  const result = await fcmRes.json()
-  return jsonResponse(200, result)
-})
+  const result = await fcmRes.json();
+  return jsonResponse(200, result);
+});

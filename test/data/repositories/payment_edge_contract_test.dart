@@ -12,16 +12,16 @@ void main() {
     setUpAll(() {
       verifyPayment = File(
         'supabase/functions/verify-payment/index.ts',
-      ).readAsStringSync();
+      ).readAsStringSync()._quoteNormalized();
       refundPayment = File(
         'supabase/functions/refund-payment/index.ts',
-      ).readAsStringSync();
+      ).readAsStringSync()._quoteNormalized();
       settleReservation = File(
         'supabase/functions/settle-reservation/index.ts',
-      ).readAsStringSync();
+      ).readAsStringSync()._quoteNormalized();
       resolveDispute = File(
         'supabase/functions/resolve-dispute/index.ts',
-      ).readAsStringSync();
+      ).readAsStringSync()._quoteNormalized();
     });
 
     test(
@@ -196,4 +196,8 @@ void main() {
       );
     });
   });
+}
+
+extension on String {
+  String _quoteNormalized() => replaceAll('"', "'");
 }

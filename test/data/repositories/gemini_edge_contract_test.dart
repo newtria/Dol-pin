@@ -5,11 +5,15 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('gemini-analyze edge function contract', () {
     late String functionSource;
+    late String authSource;
     late String serviceSource;
 
     setUpAll(() {
       functionSource = File(
         'supabase/functions/gemini-analyze/index.ts',
+      ).readAsStringSync();
+      authSource = File(
+        'supabase/functions/_shared/auth.ts',
       ).readAsStringSync();
       serviceSource = File(
         'lib/data/datasources/gemini_service.dart',
@@ -17,11 +21,12 @@ void main() {
     });
 
     test('requires a Supabase bearer token before calling Gemini', () {
-      expect(functionSource, contains('Missing bearer token'));
-      expect(functionSource, contains('supabase.auth.getUser'));
-      expect(functionSource, contains('Invalid token'));
+      expect(functionSource, contains('requireAuthenticatedUser'));
+      expect(authSource, contains('Missing bearer token'));
+      expect(authSource, contains('auth.getUser'));
+      expect(authSource, contains('Invalid token'));
       expect(
-        functionSource.indexOf('supabase.auth.getUser'),
+        functionSource.indexOf('requireAuthenticatedUser'),
         lessThan(functionSource.indexOf('geminiResponse = await fetch')),
       );
     });

@@ -27,139 +27,27 @@
 //   8. Return the normalized status + amount to the client.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireAuthenticatedUser } from "../_shared/auth.ts";
+import {
+  jsonResponse,
+  optionsResponse,
+  parseJsonBody,
+} from "../_shared/http.ts";
+import {
+  extractReservationId,
+  fetchPortOnePayment,
+  getPortOneAccessToken,
+  normalizePortOneStatus,
+  portOneCancel,
+  type PortOnePayment,
+} from "../_shared/portone.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const PORTONE_IMP_KEY = Deno.env.get("PORTONE_IMP_KEY")!;
-const PORTONE_IMP_SECRET = Deno.env.get("PORTONE_IMP_SECRET")!;
-
-const PORTONE_API = "https://api.iamport.kr";
-const PORTONE_TIMEOUT_MS = 15_000;
-
-// ---------------------------------------------------------------------------
-// PortOne access token (cached in module scope while the worker is warm)
-// ---------------------------------------------------------------------------
-
-let cachedPortOneToken: { value: string; expiresAt: number } | null = null;
-
-async function getPortOneAccessToken(): Promise<string> {
-  const now = Date.now();
-  if (cachedPortOneToken && cachedPortOneToken.expiresAt - 60_000 > now) {
-    return cachedPortOneToken.value;
-  }
-
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), PORTONE_TIMEOUT_MS);
-  try {
-    const res = await fetch(`${PORTONE_API}/users/getToken`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        imp_key: PORTONE_IMP_KEY,
-        imp_secret: PORTONE_IMP_SECRET,
-      }),
-      signal: ctrl.signal,
-    });
-    if (!res.ok) {
-      throw new Error(`PortOne token HTTP ${res.status}`);
-    }
-    const data = await res.json();
-    if (data.code !== 0) {
-      throw new Error(`PortOne token: ${data.message ?? "unknown"}`);
-    }
-    const token = data.response.access_token as string;
-    // PortOne returns `expired_at` as unix seconds.
-    const expiresAt = Number(data.response.expired_at) * 1000;
-    cachedPortOneToken = { value: token, expiresAt };
-    return token;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-interface PortOnePayment {
-  imp_uid: string;
-  merchant_uid: string;
-  amount: number;
-  cancel_amount?: number;
-  status: string; // 'ready' | 'paid' | 'failed' | 'cancelled'
-  currency?: string;
-  pg_provider?: string;
-  pay_method?: string;
-}
-
-async function fetchPortOnePayment(
-  impUid: string,
-  token: string,
-): Promise<PortOnePayment> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), PORTONE_TIMEOUT_MS);
-  try {
-    const res = await fetch(
-      `${PORTONE_API}/payments/${encodeURIComponent(impUid)}`,
-      {
-        method: "GET",
-        headers: { Authorization: token },
-        signal: ctrl.signal,
-      },
-    );
-    if (!res.ok) {
-      throw new Error(`PortOne payment HTTP ${res.status}`);
-    }
-    const data = await res.json();
-    if (data.code !== 0) {
-      throw new Error(`PortOne payment: ${data.message ?? "unknown"}`);
-    }
-    return data.response as PortOnePayment;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function portOneCancel(
-  token: string,
-  params: { imp_uid: string; amount?: number; reason: string },
-): Promise<PortOnePayment> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), PORTONE_TIMEOUT_MS);
-  try {
-    const res = await fetch(`${PORTONE_API}/payments/cancel`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: token,
-      },
-      body: JSON.stringify(params),
-      signal: ctrl.signal,
-    });
-    if (!res.ok) throw new Error(`PortOne cancel HTTP ${res.status}`);
-    const data = await res.json();
-    if (data.code !== 0) {
-      throw new Error(`PortOne cancel: ${data.message ?? "unknown"}`);
-    }
-    return data.response as PortOnePayment;
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Request handler
 // ---------------------------------------------------------------------------
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
 
 async function refundCapturedVerificationPayment(
   impUid: string,
@@ -199,67 +87,25 @@ async function refundCapturedVerificationPayment(
   }
 }
 
-/// Normalizes PortOne's status vocabulary to the app's PaymentStatus enum.
-function normalizeStatus(portOneStatus: string): string {
-  switch (portOneStatus) {
-    case "paid":
-      return "success";
-    case "ready":
-      return "pending";
-    case "failed":
-    case "cancelled":
-    default:
-      return "failed";
-  }
-}
-
-/// Extracts the reservation UUID from a `dolpin_<uuid>_<epoch>` merchant_uid.
-/// Returns null if the string does not match the expected shape.
-function extractReservationId(merchantUid: string): string | null {
-  // `dolpin` prefix + UUID (no underscores inside) + `_` + epoch-ms.
-  // Splitting on `_` gives [dolpin, uuid, epoch].
-  if (!merchantUid.startsWith("dolpin_")) return null;
-  const parts = merchantUid.split("_");
-  if (parts.length !== 3) return null;
-  return parts[1];
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return optionsResponse();
   }
   if (req.method !== "POST") {
     return jsonResponse(405, { error: "Method not allowed" });
   }
 
-  const authHeader = req.headers.get("Authorization") ?? "";
-  if (!authHeader.toLowerCase().startsWith("bearer ")) {
-    return jsonResponse(401, { error: "Missing bearer token" });
-  }
-  const callerJwt = authHeader.slice("Bearer ".length).trim();
-  if (!callerJwt) {
-    return jsonResponse(401, { error: "Empty bearer token" });
-  }
-
-  // Resolve the authenticated caller from their JWT.
-  const callerClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${callerJwt}` } },
-  });
-  const { data: userData, error: userError } = await callerClient.auth.getUser(
-    callerJwt,
+  const caller = await requireAuthenticatedUser(
+    req,
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY,
   );
-  if (userError || !userData?.user) {
-    return jsonResponse(401, { error: "Invalid token" });
-  }
-  const callerId = userData.user.id;
+  if (caller instanceof Response) return caller;
+  const callerId = caller.id;
 
   // Parse body.
-  let body: { imp_uid?: unknown };
-  try {
-    body = await req.json();
-  } catch {
-    return jsonResponse(400, { error: "Invalid JSON body" });
-  }
+  const body = await parseJsonBody<{ imp_uid?: unknown }>(req);
+  if (body instanceof Response) return body;
   const impUid = body.imp_uid;
   if (typeof impUid !== "string" || impUid.length === 0) {
     return jsonResponse(400, { error: "Missing imp_uid" });
@@ -319,7 +165,7 @@ Deno.serve(async (req) => {
     return jsonResponse(409, { error: "Currency mismatch" });
   }
 
-  const normalized = normalizeStatus(payment.status);
+  const normalized = normalizePortOneStatus(payment.status);
   let roomId: string | null = null;
 
   // Advance the reservation state once, idempotently. This RPC locks the row
