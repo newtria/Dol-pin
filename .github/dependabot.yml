@@ -10,9 +10,15 @@ updates:
     labels:
       - "dependencies"
       - "pub"
+    ignore:
+      # Pub majors require source/platform migrations and should be scheduled
+      # explicitly instead of opening repeat red CI PRs.
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
     # Group patch / minor bumps so they land as a single PR per week
-    # instead of a flood that nobody triages. Major bumps still come in
-    # as individual PRs because they tend to be breaking.
+    # instead of a flood that nobody triages. Allowed major bumps still
+    # come in as individual PRs because they tend to be breaking.
     groups:
       pub-production-patches:
         dependency-type: "production"
@@ -27,16 +33,6 @@ updates:
         update-types:
           - "patch"
           - "minor"
-      riverpod:
-        patterns:
-          - "flutter_riverpod"
-          - "riverpod*"
-      freezed:
-        patterns:
-          - "freezed*"
-      supabase:
-        patterns:
-          - "supabase*"
 
   # GitHub Actions workflow files
   - package-ecosystem: "github-actions"

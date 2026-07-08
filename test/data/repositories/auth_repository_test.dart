@@ -1,8 +1,12 @@
-import 'package:dolpin/core/errors/failures.dart';
-import 'package:dolpin/data/repositories/auth_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'package:dolpin/core/constants/database.dart';
+import 'package:dolpin/core/errors/failures.dart';
+import 'package:dolpin/data/repositories/auth_repository.dart';
+
+import '../../helpers/postgrest_fakes.dart';
 
 class MockSupabaseClient extends Mock implements SupabaseClient {}
 
@@ -17,6 +21,7 @@ void main() {
     mockClient = MockSupabaseClient();
     mockAuth = MockGoTrueClient();
     when(() => mockClient.auth).thenReturn(mockAuth);
+    when(() => mockAuth.currentUser).thenReturn(null);
     repository = AuthRepository(mockClient);
   });
 
@@ -31,7 +36,7 @@ void main() {
       expect(result.isSuccess, isTrue);
     });
 
-    test('maps AuthException to AuthFailure', () async {
+    test('returns Fail with AuthFailure on AuthException', () async {
       when(
         () => mockAuth.signInWithOtp(phone: '+821012345678'),
       ).thenThrow(AuthException('Rate limit exceeded'));
@@ -73,13 +78,71 @@ void main() {
       expect(result.isSuccess, isTrue);
       expect(result.value, authResponse);
     });
+
+    test('returns Fail on invalid token', () async {
+      when(
+        () => mockAuth.verifyOTP(
+          phone: '+821012345678',
+          token: '000000',
+          type: OtpType.sms,
+        ),
+      ).thenThrow(AuthException('Invalid OTP'));
+
+      final result = await repository.verifyOtp('+821012345678', '000000');
+
+      expect(result.isFailure, isTrue);
+      expect(result.failure, isA<AuthFailure>());
+    });
   });
 
-  test('signOut delegates to Supabase auth', () async {
-    when(() => mockAuth.signOut()).thenAnswer((_) async {});
+  group('signOut', () {
+    test('calls auth signOut', () async {
+      when(() => mockAuth.signOut()).thenAnswer((_) async {});
 
-    await repository.signOut();
+      await repository.signOut();
 
-    verify(() => mockAuth.signOut()).called(1);
+      verify(() => mockAuth.signOut()).called(1);
+    });
+  });
+
+  group('getProfile', () {
+    late MockSupabaseQueryBuilder mockQueryBuilder;
+    late MockPostgrestFilterBuilder<PostgrestList> mockFilterBuilder;
+
+    setUp(() {
+      mockQueryBuilder = MockSupabaseQueryBuilder();
+      mockFilterBuilder = MockPostgrestFilterBuilder<PostgrestList>();
+      when(
+        () => mockClient.from(DbTables.publicUserProfiles),
+      ).thenAnswer((_) => mockQueryBuilder);
+      when(
+        () => mockQueryBuilder.select(any()),
+      ).thenAnswer((_) => mockFilterBuilder);
+    });
+
+    test('returns Success(null) when user not found', () async {
+      when(
+        () => mockFilterBuilder.eq('id', 'user-123'),
+      ).thenAnswer((_) => mockFilterBuilder);
+      when(
+        () => mockFilterBuilder.maybeSingle(),
+      ).thenAnswer((_) => FakePostgrestResponse<PostgrestMap?>(null));
+
+      final result = await repository.getProfile('user-123');
+
+      expect(result.isSuccess, isTrue);
+      expect(result.value, isNull);
+    });
+
+    test('returns Fail on PostgrestException', () async {
+      when(
+        () => mockFilterBuilder.eq('id', 'user-123'),
+      ).thenThrow(PostgrestException(message: 'DB error', code: '500'));
+
+      final result = await repository.getProfile('user-123');
+
+      expect(result.isFailure, isTrue);
+      expect(result.failure, isA<ServerFailure>());
+    });
   });
 }
