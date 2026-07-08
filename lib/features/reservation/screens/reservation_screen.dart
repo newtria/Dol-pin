@@ -2,18 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/utils/formatters.dart';
 import '../../../data/models/rental_item_model.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/rental_provider.dart';
-import '../../../shared/widgets/cached_image.dart';
 import '../../../shared/widgets/dolpin_button.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/widgets/error_view.dart';
-import '../../../shared/widgets/safe_badge.dart';
 import '../../../data/datasources/payment_service.dart';
 import '../application/reservation_checkout_controller.dart';
+import '../widgets/reservation_checkout_sections.dart';
 import 'payment_screen.dart';
 
 class ReservationScreen extends ConsumerWidget {
@@ -230,123 +228,23 @@ class _ReservationBodyState extends ConsumerState<_ReservationBody> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
     final item = widget.item;
-    final currency = item.currency;
     final quote = _quote;
     final days = quote?.days ?? 0;
-    final rentalFee = quote?.rentalFee ?? 0;
-    final total = quote?.total ?? item.deposit;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: item.photos.isNotEmpty
-                    ? CachedImage(
-                        imageUrl: item.photos.first,
-                        width: 80,
-                        height: 80,
-                      )
-                    : Container(
-                        width: 80,
-                        height: 80,
-                        color: AppColors.surfaceLight,
-                      ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${CurrencyFormatter.format(item.dailyPrice, currency)} ${l.perDay}',
-                      style: const TextStyle(color: AppColors.primary),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          ReservationItemHeader(item: item),
           const SizedBox(height: 24),
-          GestureDetector(
+          ReservationDateSelector(
+            dateRange: _dateRange,
+            days: days,
             onTap: _selectDates,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceLight,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.divider),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.date_range, color: AppColors.primary),
-                  const SizedBox(width: 12),
-                  Text(
-                    _dateRange != null
-                        ? DateFormatter.rentalPeriod(
-                            _dateRange!.start,
-                            _dateRange!.end,
-                          )
-                        : l.selectRentalDates,
-                    style: TextStyle(
-                      color: _dateRange != null
-                          ? AppColors.textPrimary
-                          : AppColors.textHint,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (_dateRange != null)
-                    Text(
-                      l.dayCount(days),
-                      style: const TextStyle(color: AppColors.primary),
-                    ),
-                ],
-              ),
-            ),
           ),
           const SizedBox(height: 32),
-          Text(
-            l.priceSummary,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 16),
-          _PriceRow(
-            label: l.rentalFeeLabel(
-              CurrencyFormatter.format(item.dailyPrice, currency),
-              days,
-            ),
-            value: CurrencyFormatter.format(rentalFee, currency),
-          ),
-          const SizedBox(height: 8),
-          _PriceRow(
-            label: l.depositRefundable,
-            value: CurrencyFormatter.format(item.deposit, currency),
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Divider(color: AppColors.divider),
-          ),
-          _PriceRow(
-            label: l.total,
-            value: CurrencyFormatter.format(total, currency),
-            isBold: true,
-          ),
-          const SizedBox(height: 24),
-          SafeBadge(label: l.escrowProtectedFull),
+          ReservationPriceSummary(item: item, quote: quote),
           const SizedBox(height: 40),
           DolpinButton(
             label: l.proceedToPayment,
@@ -355,44 +253,6 @@ class _ReservationBodyState extends ConsumerState<_ReservationBody> {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _PriceRow extends StatelessWidget {
-  const _PriceRow({
-    required this.label,
-    required this.value,
-    this.isBold = false,
-  });
-
-  final String label;
-  final String value;
-  final bool isBold;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isBold ? AppColors.textPrimary : AppColors.textSecondary,
-              fontWeight: isBold ? FontWeight.w600 : FontWeight.normal,
-            ),
-          ),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            color: isBold ? AppColors.textPrimary : AppColors.textSecondary,
-            fontWeight: isBold ? FontWeight.w700 : FontWeight.normal,
-            fontSize: isBold ? 18 : 14,
-          ),
-        ),
-      ],
     );
   }
 }

@@ -8,6 +8,7 @@ void main() {
     late String refundPayment;
     late String settleReservation;
     late String resolveDispute;
+    late String reservationActions;
 
     setUpAll(() {
       verifyPayment = File(
@@ -21,6 +22,9 @@ void main() {
       ).readAsStringSync()._quoteNormalized();
       resolveDispute = File(
         'supabase/functions/resolve-dispute/index.ts',
+      ).readAsStringSync()._quoteNormalized();
+      reservationActions = File(
+        'supabase/functions/_shared/reservation-actions.ts',
       ).readAsStringSync()._quoteNormalized();
     });
 
@@ -73,17 +77,21 @@ void main() {
     test(
       'refund opens a pending action before PortOne cancel and keeps ambiguous provider failures locked',
       () {
-        final begin = refundPayment.indexOf(
-          "'begin_reservation_payment_action'",
-        );
+        final begin = refundPayment.indexOf('beginReservationPaymentAction');
         final cancel = refundPayment.indexOf('cancelled = await portOneCancel');
-        final clear = refundPayment.indexOf(
-          "'clear_reservation_payment_action'",
-        );
+        final clear = refundPayment.indexOf('clearReservationPaymentAction');
 
         expect(begin, greaterThanOrEqualTo(0));
         expect(cancel, greaterThan(begin));
         expect(clear, greaterThan(begin));
+        expect(
+          reservationActions,
+          contains("'begin_reservation_payment_action'"),
+        );
+        expect(
+          reservationActions,
+          contains("'clear_reservation_payment_action'"),
+        );
         expect(
           refundPayment,
           contains(
@@ -101,25 +109,24 @@ void main() {
           refundPayment.indexOf("console.error('PortOne cancel failed'"),
           refundPayment.indexOf('const { data: txResult'),
         );
-        expect(
-          providerCatch,
-          isNot(contains("'clear_reservation_payment_action'")),
-        );
+        expect(providerCatch, isNot(contains('clearReservationPaymentAction')));
       },
     );
 
     test('settlement opens a pending action before partial deposit refund', () {
-      final begin = settleReservation.indexOf(
-        "'begin_reservation_payment_action'",
-      );
+      final begin = settleReservation.indexOf('beginReservationPaymentAction');
       final cancel = settleReservation.indexOf(
         'cancelled = await portOneCancel',
       );
 
       expect(begin, greaterThanOrEqualTo(0));
       expect(cancel, greaterThan(begin));
-      expect(settleReservation, contains("p_action: 'settle_pending'"));
-      expect(settleReservation, contains("'clear_reservation_payment_action'"));
+      expect(settleReservation, contains("action: 'settle_pending'"));
+      expect(settleReservation, contains('clearReservationPaymentAction'));
+      expect(
+        reservationActions,
+        contains("'begin_reservation_payment_action'"),
+      );
       expect(
         settleReservation,
         contains('Deposit refunded at PortOne but state transition failed'),
@@ -133,10 +140,7 @@ void main() {
         settleReservation.indexOf("console.error('PortOne cancel failed'"),
         settleReservation.indexOf('// Advance state via the RPC.'),
       );
-      expect(
-        providerCatch,
-        isNot(contains("'clear_reservation_payment_action'")),
-      );
+      expect(providerCatch, isNot(contains('clearReservationPaymentAction')));
     });
 
     test(
@@ -153,8 +157,12 @@ void main() {
         );
         expect(settleReservation, contains('actionIsStale'));
         expect(
-          settleReservation,
-          contains('Date.now() - actionStartedAt > 10 * 60_000'),
+          reservationActions,
+          contains('PAYMENT_ACTION_STALE_MS = 10 * 60_000'),
+        );
+        expect(
+          reservationActions,
+          contains('now - actionStartedAt > PAYMENT_ACTION_STALE_MS'),
         );
         expect(settleReservation, contains('reservation.deposit === 0'));
         expect(
@@ -170,8 +178,8 @@ void main() {
       expect(resolveDispute, contains('reservation_dispute_resolutions'));
       expect(resolveDispute, contains("reservation.status !== 'disputed'"));
       expect(resolveDispute, contains('refundAmount > reservation.total_paid'));
-      expect(resolveDispute, contains("p_target: 'resolved'"));
-      expect(resolveDispute, contains("p_actor_kind: 'admin'"));
+      expect(resolveDispute, contains("target: 'resolved'"));
+      expect(resolveDispute, contains("actorKind: 'admin'"));
       expect(resolveDispute, contains('idempotency_key'));
       expect(resolveDispute, contains('retried_transition'));
       expect(resolveDispute, contains('providerAlreadyRefunded'));
@@ -184,16 +192,14 @@ void main() {
         resolveDispute.indexOf('if (existing)'),
         resolveDispute.indexOf("if (reservation.status !== 'disputed')"),
       );
-      expect(existingBranch, contains("'transition_reservation_status'"));
+      expect(existingBranch, contains('transitionReservationStatus'));
+      expect(reservationActions, contains("'transition_reservation_status'"));
 
       final providerCatch = resolveDispute.substring(
         resolveDispute.indexOf("console.error('PortOne dispute refund failed'"),
         resolveDispute.indexOf('const { data: resolution'),
       );
-      expect(
-        providerCatch,
-        isNot(contains("'clear_reservation_payment_action'")),
-      );
+      expect(providerCatch, isNot(contains('clearReservationPaymentAction')));
     });
   });
 }

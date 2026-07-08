@@ -17,6 +17,11 @@ import {
   getPortOneAccessToken,
   portOneCancel,
 } from "../_shared/portone.ts";
+import {
+  beginReservationPaymentAction,
+  clearReservationPaymentAction,
+  transitionReservationStatus,
+} from "../_shared/reservation-actions.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -87,12 +92,12 @@ Deno.serve(async (req) => {
     .maybeSingle();
   if (existing) {
     if (reservation.status === "disputed") {
-      const { data: retryTxResult, error: retryTxError } = await adminClient
-        .rpc("transition_reservation_status", {
-          p_reservation_id: reservationId,
-          p_target: "resolved",
-          p_actor_kind: "admin",
-          p_reason: reason.trim(),
+      const { data: retryTxResult, error: retryTxError } =
+        await transitionReservationStatus(adminClient, {
+          reservationId,
+          target: "resolved",
+          actorKind: "admin",
+          reason: reason.trim(),
         });
       if (retryTxError || retryTxResult?.ok !== true) {
         console.error("dispute retry transition failed", {
@@ -160,15 +165,13 @@ Deno.serve(async (req) => {
   }
 
   if (!providerAlreadyRefunded) {
-    const { data: beginResult, error: beginError } = await adminClient.rpc(
-      "begin_reservation_payment_action",
-      {
-        p_reservation_id: reservationId,
-        p_action: "dispute_pending",
-        p_payment_id: reservation.payment_id,
-        p_actor_id: null,
-      },
-    );
+    const { data: beginResult, error: beginError } =
+      await beginReservationPaymentAction(adminClient, {
+        reservationId,
+        action: "dispute_pending",
+        paymentId: reservation.payment_id,
+        actorId: null,
+      });
     if (beginError || beginResult?.ok !== true) {
       console.error("begin dispute resolution failed", {
         beginError,
@@ -218,21 +221,21 @@ Deno.serve(async (req) => {
       reservationId,
     });
     if (normalizedRefundAmount === 0) {
-      await adminClient.rpc("clear_reservation_payment_action", {
-        p_reservation_id: reservationId,
-        p_action: "dispute_pending",
+      await clearReservationPaymentAction(adminClient, {
+        reservationId,
+        action: "dispute_pending",
       });
     }
     return jsonResponse(500, { error: "Could not write resolution ledger" });
   }
 
-  const { data: txResult, error: txError } = await adminClient.rpc(
-    "transition_reservation_status",
+  const { data: txResult, error: txError } = await transitionReservationStatus(
+    adminClient,
     {
-      p_reservation_id: reservationId,
-      p_target: "resolved",
-      p_actor_kind: "admin",
-      p_reason: reason.trim(),
+      reservationId,
+      target: "resolved",
+      actorKind: "admin",
+      reason: reason.trim(),
     },
   );
   if (txError || txResult?.ok !== true) {

@@ -6,6 +6,7 @@ import '../../../shared/dialogs/confirm_dialog.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../providers/auth_provider.dart';
 import '../application/profile_preferences_controller.dart';
+import '../widgets/preference_picker_sheet.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -154,45 +155,16 @@ class SettingsScreen extends ConsumerWidget {
     String currentLocale,
   ) {
     final l = AppLocalizations.of(context)!;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.surface,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final (code, name) in [
-              ('ko', l.langKorean),
-              ('en', l.langEnglish),
-              ('id', l.langIndonesian),
-              ('ja', l.langJapanese),
-            ])
-              ListTile(
-                title: Text(name),
-                trailing: code == currentLocale
-                    ? const Icon(Icons.check, color: AppColors.primary)
-                    : null,
-                onTap: () async {
-                  Navigator.pop(context);
-                  final userId = ref.read(currentUserIdProvider);
-                  if (userId != null) {
-                    final result = await ref
-                        .read(profilePreferencesControllerProvider)
-                        .updateLocale(userId: userId, locale: code);
-                    if (!context.mounted) return;
-                    result.when(
-                      success: (_) => ref.invalidate(currentUserProvider),
-                      failure: (f) =>
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(l.errorPrefix(f.message))),
-                          ),
-                    );
-                  }
-                },
-              ),
-          ],
-        ),
-      ),
+    PreferencePickerSheet.show(
+      context,
+      currentCode: currentLocale,
+      options: [
+        (code: 'ko', label: l.langKorean),
+        (code: 'en', label: l.langEnglish),
+        (code: 'id', label: l.langIndonesian),
+        (code: 'ja', label: l.langJapanese),
+      ],
+      onSelected: (code) => _updateLocale(context, ref, code),
     );
   }
 
@@ -202,46 +174,59 @@ class SettingsScreen extends ConsumerWidget {
     String currentCurrency,
   ) {
     final l = AppLocalizations.of(context)!;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.surface,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final (code, name) in [
-              ('KRW', l.currencyKRW),
-              ('IDR', l.currencyIDR),
-              ('JPY', l.currencyJPY),
-              ('USD', l.currencyUSD),
-            ])
-              ListTile(
-                title: Text(name),
-                trailing: code == currentCurrency
-                    ? const Icon(Icons.check, color: AppColors.primary)
-                    : null,
-                onTap: () async {
-                  Navigator.pop(context);
-                  final userId = ref.read(currentUserIdProvider);
-                  if (userId != null) {
-                    final result = await ref
-                        .read(profilePreferencesControllerProvider)
-                        .updateCurrency(userId: userId, currency: code);
-                    if (!context.mounted) return;
-                    result.when(
-                      success: (_) => ref.invalidate(currentUserProvider),
-                      failure: (f) =>
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(l.errorPrefix(f.message))),
-                          ),
-                    );
-                  }
-                },
-              ),
-          ],
-        ),
+    PreferencePickerSheet.show(
+      context,
+      currentCode: currentCurrency,
+      options: [
+        (code: 'KRW', label: l.currencyKRW),
+        (code: 'IDR', label: l.currencyIDR),
+        (code: 'JPY', label: l.currencyJPY),
+        (code: 'USD', label: l.currencyUSD),
+      ],
+      onSelected: (code) => _updateCurrency(context, ref, code),
+    );
+  }
+
+  Future<void> _updateLocale(
+    BuildContext context,
+    WidgetRef ref,
+    String code,
+  ) async {
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
+    final result = await ref
+        .read(profilePreferencesControllerProvider)
+        .updateLocale(userId: userId, locale: code);
+    if (!context.mounted) return;
+    result.when(
+      success: (_) => ref.invalidate(currentUserProvider),
+      failure: (f) => ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_localizedError(context, f.message))),
       ),
     );
+  }
+
+  Future<void> _updateCurrency(
+    BuildContext context,
+    WidgetRef ref,
+    String code,
+  ) async {
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
+    final result = await ref
+        .read(profilePreferencesControllerProvider)
+        .updateCurrency(userId: userId, currency: code);
+    if (!context.mounted) return;
+    result.when(
+      success: (_) => ref.invalidate(currentUserProvider),
+      failure: (f) => ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_localizedError(context, f.message))),
+      ),
+    );
+  }
+
+  String _localizedError(BuildContext context, String message) {
+    return AppLocalizations.of(context)!.errorPrefix(message);
   }
 }
 

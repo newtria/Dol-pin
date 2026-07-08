@@ -9,6 +9,7 @@ void main() {
     late String runbook;
     late String migration;
     late String resolveDispute;
+    late String reservationActions;
     late String envExample;
     late String readme;
     late String supabaseConfig;
@@ -25,6 +26,9 @@ void main() {
       ).readAsStringSync();
       resolveDispute = File(
         'supabase/functions/resolve-dispute/index.ts',
+      ).readAsStringSync()._quoteNormalized();
+      reservationActions = File(
+        'supabase/functions/_shared/reservation-actions.ts',
       ).readAsStringSync()._quoteNormalized();
       envExample = File('.env.example').readAsStringSync();
       readme = File('README.md').readAsStringSync();
@@ -154,9 +158,17 @@ void main() {
           "payment_action IN ('refund_pending', 'settle_pending', 'dispute_pending')",
         ),
       );
-      expect(resolveDispute, contains("'begin_reservation_payment_action'"));
-      expect(resolveDispute, contains("p_action: 'dispute_pending'"));
-      expect(resolveDispute, contains("'clear_reservation_payment_action'"));
+      expect(resolveDispute, contains('beginReservationPaymentAction'));
+      expect(resolveDispute, contains("action: 'dispute_pending'"));
+      expect(resolveDispute, contains('clearReservationPaymentAction'));
+      expect(
+        reservationActions,
+        contains("'begin_reservation_payment_action'"),
+      );
+      expect(
+        reservationActions,
+        contains("'clear_reservation_payment_action'"),
+      );
       expect(resolveDispute, contains('fetchPortOnePayment'));
       expect(resolveDispute, contains('providerAlreadyRefunded'));
       expect(resolveDispute, contains('retried_transition'));
@@ -165,9 +177,7 @@ void main() {
         contains('Retry will reconcile provider state before another cancel.'),
       );
 
-      final begin = resolveDispute.indexOf(
-        "'begin_reservation_payment_action'",
-      );
+      final begin = resolveDispute.indexOf('beginReservationPaymentAction');
       final cancel = resolveDispute.indexOf('await portOneCancel');
       expect(begin, greaterThanOrEqualTo(0));
       expect(cancel, greaterThan(begin));

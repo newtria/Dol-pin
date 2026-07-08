@@ -17,6 +17,7 @@ import '../../../shared/widgets/error_view.dart';
 import '../../../shared/widgets/loading_indicator.dart';
 import '../application/reservation_action_controller.dart';
 import '../application/reservation_detail_action_presenter.dart';
+import '../widgets/reservation_detail_dialogs.dart';
 import '../widgets/reservation_detail_sections.dart';
 
 class ReservationDetailScreen extends ConsumerWidget {
@@ -123,7 +124,8 @@ class _ReservationDetailBodyState
 
   Future<void> _dispute() async {
     final l = AppLocalizations.of(context)!;
-    final reason = await _promptOptionalText(
+    final reason = await ReservationDetailDialogs.promptOptionalText(
+      context,
       title: l.disputeReason,
       hint: l.describeIssue,
     );
@@ -138,7 +140,8 @@ class _ReservationDetailBodyState
 
   Future<void> _settle() async {
     final l = AppLocalizations.of(context)!;
-    final confirmed = await _confirmAction(
+    final confirmed = await ReservationDetailDialogs.confirmAction(
+      context,
       title: l.settleDeposit,
       message: l.confirmSettlementMessage,
     );
@@ -151,7 +154,8 @@ class _ReservationDetailBodyState
 
   Future<void> _refundPaid() async {
     final l = AppLocalizations.of(context)!;
-    final confirmed = await _confirmAction(
+    final confirmed = await ReservationDetailDialogs.confirmAction(
+      context,
       title: l.cancelAndRefund,
       message: l.confirmRefundMessage,
     );
@@ -161,30 +165,6 @@ class _ReservationDetailBodyState
           ref.read(reservationActionControllerProvider).refundPaid(reservation),
       successMessage: l.reservationCancelled,
     );
-  }
-
-  Future<bool> _confirmAction({
-    required String title,
-    required String message,
-  }) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(AppLocalizations.of(context)!.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(AppLocalizations.of(context)!.confirm),
-          ),
-        ],
-      ),
-    );
-    return confirmed ?? false;
   }
 
   Future<void> _openChat() async {
@@ -216,37 +196,6 @@ class _ReservationDetailBodyState
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }
-  }
-
-  Future<String?> _promptOptionalText({
-    required String title,
-    required String hint,
-  }) async {
-    final controller = TextEditingController();
-    final value = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(hintText: hint),
-          maxLines: 3,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(AppLocalizations.of(context)!.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: Text(AppLocalizations.of(context)!.confirm),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (value == null || value.isEmpty) return null;
-    return value;
   }
 
   @override

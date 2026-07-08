@@ -131,6 +131,7 @@ const requiredFiles = [
   '.env.example',
   'supabase/config.toml',
   'supabase/migrations/017_reservation_state_machine.sql',
+  'supabase/functions/_shared/reservation-actions.ts',
   'scripts/resolve-dispute.mjs',
   ...edgeFunctionFiles,
 ]
@@ -159,11 +160,19 @@ checkContains(
 )
 checkContains(
   'supabase/functions/resolve-dispute/index.ts',
-  "'begin_reservation_payment_action'",
+  'beginReservationPaymentAction',
 )
 checkContains(
   'supabase/functions/resolve-dispute/index.ts',
-  "p_action: 'dispute_pending'",
+  'action: "dispute_pending"',
+)
+checkContains(
+  'supabase/functions/_shared/reservation-actions.ts',
+  '"begin_reservation_payment_action"',
+)
+checkContains(
+  'supabase/functions/_shared/reservation-actions.ts',
+  '"clear_reservation_payment_action"',
 )
 checkContains(
   'supabase/functions/resolve-dispute/index.ts',

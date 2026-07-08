@@ -13,8 +13,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/dolpin_button.dart';
 import '../application/register_item_controller.dart';
 import '../application/register_item_form_policy.dart';
-import '../widgets/condition_selector.dart';
-import '../widgets/photo_upload.dart';
+import '../widgets/register_item_form_sections.dart';
 
 class RegisterItemScreen extends ConsumerStatefulWidget {
   const RegisterItemScreen({super.key});
@@ -112,6 +111,37 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
     }
   }
 
+  Future<void> _addPhotos() async {
+    final picker = ImagePicker();
+    // Compress + downscale on pick. Prevents OOM during base64-encode for
+    // Gemini and keeps Supabase storage bills sane.
+    final images = await picker.pickMultiImage(
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 82,
+    );
+    if (images.isEmpty) return;
+    final wasEmpty = _photos.isEmpty;
+    setState(() => _photos.addAll(images));
+    if (wasEmpty && _photos.isNotEmpty) {
+      unawaited(_autoTag(_photos.first));
+    }
+  }
+
+  void _removePhoto(int index) {
+    setState(() => _photos.removeAt(index));
+    if (index == 0 && _photos.isNotEmpty) {
+      unawaited(_autoTag(_photos.first));
+    }
+    if (_photos.isEmpty) {
+      _autoTagRequestId++;
+      setState(() {
+        _vlmTag = null;
+        _isAutoTagging = false;
+      });
+    }
+  }
+
   Future<void> _submit() async {
     final l = AppLocalizations.of(context)!;
     final userId = ref.read(currentUserIdProvider);
@@ -185,240 +215,63 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            PhotoUpload(
+            RegisterPhotoSection(
               photos: _photos,
-              onAdd: () async {
-                final picker = ImagePicker();
-                // Compress + downscale on pick. Prevents OOM during
-                // base64-encode for Gemini and keeps Supabase storage
-                // bills sane (item photos don't need full phone resolution).
-                final images = await picker.pickMultiImage(
-                  maxWidth: 1600,
-                  maxHeight: 1600,
-                  imageQuality: 82,
-                );
-                if (images.isEmpty) return;
-                final wasEmpty = _photos.isEmpty;
-                setState(() => _photos.addAll(images));
-                // Auto-tag from the first photo when photos are initially added
-                if (wasEmpty && _photos.isNotEmpty) {
-                  unawaited(_autoTag(_photos.first));
-                }
-              },
-              onRemove: (i) {
-                setState(() => _photos.removeAt(i));
-                // Re-tag if cover photo changed and photos remain
-                if (i == 0 && _photos.isNotEmpty) {
-                  unawaited(_autoTag(_photos.first));
-                }
-                if (_photos.isEmpty) {
-                  _autoTagRequestId++;
-                  setState(() {
-                    _vlmTag = null;
-                    _isAutoTagging = false;
-                  });
-                }
-              },
-            ),
-            if (_isAutoTagging)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Row(
-                  children: [
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      l.autoTagging,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            if (_vlmTag != null && !_isAutoTagging)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.auto_awesome,
-                      size: 16,
-                      color: AppColors.primary,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        _vlmTag!,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 24),
-            _sectionTitle(l.concert),
-            const SizedBox(height: 8),
-            concertsAsync.when(
-              data: (concerts) => DropdownButtonFormField<String>(
-                initialValue: _selectedConcertId,
-                decoration: InputDecoration(hintText: l.selectConcert),
-                items: concerts
-                    .map(
-                      (concert) => DropdownMenuItem(
-                        value: concert.id,
-                        child: Text('${concert.title} · ${concert.city}'),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) =>
-                    setState(() => _selectedConcertId = value),
-              ),
-              loading: () => const LinearProgressIndicator(),
-              error: (_, _) => Text(
-                l.couldNotLoadConcerts,
-                style: const TextStyle(color: AppColors.error),
-              ),
+              onAdd: _addPhotos,
+              onRemove: _removePhoto,
+              isAutoTagging: _isAutoTagging,
+              vlmTag: _vlmTag,
             ),
             const SizedBox(height: 24),
-            _sectionTitle(l.category),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: ItemCategory.values.map((c) {
-                return ChoiceChip(
-                  label: Text(c.localizedLabel(l)),
-                  selected: _category == c,
-                  onSelected: (_) => setState(() => _category = c),
-                  selectedColor: AppColors.primary.withValues(alpha: 0.2),
-                );
-              }).toList(),
+            RegisterConcertSection(
+              concertsAsync: concertsAsync,
+              selectedConcertId: _selectedConcertId,
+              onChanged: (value) => setState(() => _selectedConcertId = value),
             ),
             const SizedBox(height: 24),
-            _sectionTitle(l.title),
-            const SizedBox(height: 8),
-            TextField(
+            RegisterCategorySection(
+              category: _category,
+              onChanged: (category) => setState(() => _category = category),
+            ),
+            const SizedBox(height: 24),
+            RegisterTextFieldSection(
+              title: l.title,
               controller: _titleController,
-              decoration: InputDecoration(hintText: l.titleHint),
+              hintText: l.titleHint,
             ),
             const SizedBox(height: 24),
-            _sectionTitle(l.description),
-            const SizedBox(height: 8),
-            TextField(
+            RegisterTextFieldSection(
+              title: l.description,
               controller: _descController,
+              hintText: l.descriptionHint,
               maxLines: 3,
-              decoration: InputDecoration(hintText: l.descriptionHint),
             ),
             const SizedBox(height: 24),
-            _sectionTitle(l.condition),
-            const SizedBox(height: 8),
-            ConditionSelector(
+            RegisterConditionSection(
               grade: _conditionGrade,
               onChanged: (g) => setState(() => _conditionGrade = g),
             ),
             const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _sectionTitle(l.dailyPrice),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _priceController,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          prefixText: '$currencySymbol ',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _sectionTitle(l.deposit),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _depositController,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          prefixText: '$currencySymbol ',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            RegisterPriceDepositSection(
+              priceController: _priceController,
+              depositController: _depositController,
+              currencySymbol: currencySymbol,
             ),
             const SizedBox(height: 24),
-            _sectionTitle(l.availability),
-            const SizedBox(height: 8),
-            InkWell(
+            RegisterAvailabilitySection(
+              availabilityRange: _availabilityRange,
               onTap: _selectAvailability,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceLight,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.divider),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.date_range, color: AppColors.primary),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _availabilityRange == null
-                            ? l.selectAvailability
-                            : DateFormatter.rentalPeriod(
-                                _availabilityRange!.start,
-                                _availabilityRange!.end,
-                              ),
-                        style: TextStyle(
-                          color: _availabilityRange == null
-                              ? AppColors.textHint
-                              : AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ),
             const SizedBox(height: 24),
-            _sectionTitle(l.pickupLocation),
-            const SizedBox(height: 8),
-            TextField(
+            RegisterTextFieldSection(
+              title: l.pickupLocation,
               controller: _pickupLocationController,
-              decoration: InputDecoration(hintText: l.pickupLocationHint),
+              hintText: l.pickupLocationHint,
             ),
             const SizedBox(height: 24),
-            _sectionTitle(l.pickupMethod),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: PickupMethod.values.map((m) {
-                return ChoiceChip(
-                  label: Text(m.localizedLabel(l)),
-                  selected: _pickupMethod == m,
-                  onSelected: (_) => setState(() => _pickupMethod = m),
-                  selectedColor: AppColors.primary.withValues(alpha: 0.2),
-                );
-              }).toList(),
+            RegisterPickupMethodSection(
+              pickupMethod: _pickupMethod,
+              onChanged: (method) => setState(() => _pickupMethod = method),
             ),
             const SizedBox(height: 40),
             DolpinButton(
@@ -429,17 +282,6 @@ class _RegisterItemScreenState extends ConsumerState<RegisterItemScreen> {
             const SizedBox(height: 24),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _sectionTitle(String text) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 15,
-        fontWeight: FontWeight.w600,
-        color: AppColors.textPrimary,
       ),
     );
   }

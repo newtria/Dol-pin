@@ -33,6 +33,11 @@ import {
   portOneCancel,
   type PortOnePayment,
 } from "../_shared/portone.ts";
+import {
+  beginReservationPaymentAction,
+  clearReservationPaymentAction,
+  transitionReservationStatus,
+} from "../_shared/reservation-actions.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -135,15 +140,13 @@ Deno.serve(async (req) => {
     reservation.payment_action === "refund_pending" &&
     payment.status === "cancelled"
   ) {
-    const { data: retryTxResult, error: retryTxError } = await adminClient.rpc(
-      "transition_reservation_status",
-      {
-        p_reservation_id: reservationId,
-        p_target: "cancelled",
-        p_actor_kind: "system",
-        p_reason: reason,
-      },
-    );
+    const { data: retryTxResult, error: retryTxError } =
+      await transitionReservationStatus(adminClient, {
+        reservationId,
+        target: "cancelled",
+        actorKind: "system",
+        reason,
+      });
     if (retryTxError || retryTxResult?.ok !== true) {
       console.error("refund retry transition failed", {
         retryTxError,
@@ -175,15 +178,13 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { data: beginResult, error: beginError } = await adminClient.rpc(
-    "begin_reservation_payment_action",
-    {
-      p_reservation_id: reservationId,
-      p_action: "refund_pending",
-      p_payment_id: impUid,
-      p_actor_id: callerId,
-    },
-  );
+  const { data: beginResult, error: beginError } =
+    await beginReservationPaymentAction(adminClient, {
+      reservationId,
+      action: "refund_pending",
+      paymentId: impUid,
+      actorId: callerId,
+    });
   if (beginError || beginResult?.ok !== true) {
     console.error("begin refund failed", { beginError, beginResult });
     return jsonResponse(409, {
@@ -194,9 +195,9 @@ Deno.serve(async (req) => {
   // Don't try to cancel something that isn't actually paid yet, or that
   // PortOne already marked as cancelled.
   if (payment.status !== "paid") {
-    await adminClient.rpc("clear_reservation_payment_action", {
-      p_reservation_id: reservationId,
-      p_action: "refund_pending",
+    await clearReservationPaymentAction(adminClient, {
+      reservationId,
+      action: "refund_pending",
     });
     return jsonResponse(409, {
       error: `Cannot refund a payment with status '${payment.status}'`,
@@ -220,13 +221,13 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { data: txResult, error: txError } = await adminClient.rpc(
-    "transition_reservation_status",
+  const { data: txResult, error: txError } = await transitionReservationStatus(
+    adminClient,
     {
-      p_reservation_id: reservationId,
-      p_target: "cancelled",
-      p_actor_kind: "system",
-      p_reason: reason,
+      reservationId,
+      target: "cancelled",
+      actorKind: "system",
+      reason,
     },
   );
   if (txError || txResult?.ok !== true) {

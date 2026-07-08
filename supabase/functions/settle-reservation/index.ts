@@ -38,6 +38,12 @@ import {
   portOneCancel,
   type PortOnePayment,
 } from "../_shared/portone.ts";
+import {
+  beginReservationPaymentAction,
+  clearReservationPaymentAction,
+  paymentActionIsStale,
+  transitionReservationStatus,
+} from "../_shared/reservation-actions.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -115,16 +121,14 @@ Deno.serve(async (req) => {
     }
 
     if (reservation.payment_action === "settle_pending") {
-      const actionStartedAt = reservation.payment_action_started_at
-        ? Date.parse(reservation.payment_action_started_at)
-        : 0;
-      const actionIsStale = actionStartedAt === 0 ||
-        Date.now() - actionStartedAt > 10 * 60_000;
+      const actionIsStale = paymentActionIsStale(
+        reservation.payment_action_started_at,
+      );
 
       if (reservation.deposit === 0 && actionIsStale) {
-        await adminClient.rpc("clear_reservation_payment_action", {
-          p_reservation_id: reservation.id,
-          p_action: "settle_pending",
+        await clearReservationPaymentAction(adminClient, {
+          reservationId: reservation.id,
+          action: "settle_pending",
         });
       } else if (reservation.deposit === 0) {
         return jsonResponse(409, { error: "Settlement already in progress" });
@@ -145,9 +149,9 @@ Deno.serve(async (req) => {
         const refundedAmount = payment.cancel_amount ?? 0;
         if (refundedAmount < reservation.deposit) {
           if (actionIsStale) {
-            await adminClient.rpc("clear_reservation_payment_action", {
-              p_reservation_id: reservation.id,
-              p_action: "settle_pending",
+            await clearReservationPaymentAction(adminClient, {
+              reservationId: reservation.id,
+              action: "settle_pending",
             });
           } else {
             return jsonResponse(409, {
@@ -155,11 +159,11 @@ Deno.serve(async (req) => {
             });
           }
         } else {
-          const { data: retryTxResult, error: retryTxError } = await adminClient
-            .rpc("transition_reservation_status", {
-              p_reservation_id: reservation.id,
-              p_target: "settled",
-              p_actor_kind: "system",
+          const { data: retryTxResult, error: retryTxError } =
+            await transitionReservationStatus(adminClient, {
+              reservationId: reservation.id,
+              target: "settled",
+              actorKind: "system",
             });
           if (retryTxError || retryTxResult?.ok !== true) {
             console.error("settlement retry transition failed", {
@@ -185,15 +189,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { data: beginResult, error: beginError } = await adminClient.rpc(
-      "begin_reservation_payment_action",
-      {
-        p_reservation_id: reservation.id,
-        p_action: "settle_pending",
-        p_payment_id: reservation.payment_id,
-        p_actor_id: callerId,
-      },
-    );
+    const { data: beginResult, error: beginError } =
+      await beginReservationPaymentAction(adminClient, {
+        reservationId: reservation.id,
+        action: "settle_pending",
+        paymentId: reservation.payment_id,
+        actorId: callerId,
+      });
     if (beginError || beginResult?.ok !== true) {
       console.error("begin settlement failed", { beginError, beginResult });
       return jsonResponse(409, {
@@ -227,14 +229,12 @@ Deno.serve(async (req) => {
     // Advance state via the RPC. If this fails AFTER PortOne refunded
     // the deposit, we have state divergence — surface it with imp_uid
     // so Ops can mark the row manually.
-    const { data: txResult, error: txError } = await adminClient.rpc(
-      "transition_reservation_status",
-      {
-        p_reservation_id: reservation.id,
-        p_target: "settled",
-        p_actor_kind: "system",
-      },
-    );
+    const { data: txResult, error: txError } =
+      await transitionReservationStatus(adminClient, {
+        reservationId: reservation.id,
+        target: "settled",
+        actorKind: "system",
+      });
     if (txError || txResult?.ok !== true) {
       console.error(
         "transition failed AFTER PortOne settled deposit — STATE DIVERGENCE",
