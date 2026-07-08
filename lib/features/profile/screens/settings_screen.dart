@@ -5,6 +5,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/dialogs/confirm_dialog.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../providers/auth_provider.dart';
+import '../application/profile_preferences_controller.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -171,14 +172,21 @@ class SettingsScreen extends ConsumerWidget {
                 trailing: code == currentLocale
                     ? const Icon(Icons.check, color: AppColors.primary)
                     : null,
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(context);
                   final userId = ref.read(currentUserIdProvider);
                   if (userId != null) {
-                    ref.read(authRepositoryProvider).updateProfile(userId, {
-                      'locale': code,
-                    });
-                    ref.invalidate(currentUserProvider);
+                    final result = await ref
+                        .read(profilePreferencesControllerProvider)
+                        .updateLocale(userId: userId, locale: code);
+                    if (!context.mounted) return;
+                    result.when(
+                      success: (_) => ref.invalidate(currentUserProvider),
+                      failure: (f) =>
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(l.errorPrefix(f.message))),
+                          ),
+                    );
                   }
                 },
               ),
@@ -212,14 +220,21 @@ class SettingsScreen extends ConsumerWidget {
                 trailing: code == currentCurrency
                     ? const Icon(Icons.check, color: AppColors.primary)
                     : null,
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(context);
                   final userId = ref.read(currentUserIdProvider);
                   if (userId != null) {
-                    ref.read(authRepositoryProvider).updateProfile(userId, {
-                      'currency': code,
-                    });
-                    ref.invalidate(currentUserProvider);
+                    final result = await ref
+                        .read(profilePreferencesControllerProvider)
+                        .updateCurrency(userId: userId, currency: code);
+                    if (!context.mounted) return;
+                    result.when(
+                      success: (_) => ref.invalidate(currentUserProvider),
+                      failure: (f) =>
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(l.errorPrefix(f.message))),
+                          ),
+                    );
                   }
                 },
               ),

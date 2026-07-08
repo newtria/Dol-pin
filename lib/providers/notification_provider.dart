@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -75,20 +77,22 @@ class NotificationListener {
             final status = record['status'] as String? ?? 'pending';
 
             if (status == ReservationStatus.pending.value) {
-              service.showReservationNotification(
-                title: _localized(
-                  en: 'New reservation request',
-                  ko: '새 예약 요청',
-                  ja: '新しい予約リクエスト',
-                  id: 'Permintaan reservasi baru',
+              unawaited(
+                service.showReservationNotification(
+                  title: _localized(
+                    en: 'New reservation request',
+                    ko: '새 예약 요청',
+                    ja: '新しい予約リクエスト',
+                    id: 'Permintaan reservasi baru',
+                  ),
+                  body: _localized(
+                    en: 'Someone wants to rent your item.',
+                    ko: '회원님 물건을 대여하고 싶어 하는 사용자가 있습니다.',
+                    ja: 'あなたのアイテムをレンタルしたいユーザーがいます。',
+                    id: 'Seseorang ingin menyewa item Anda.',
+                  ),
+                  reservationId: reservationId,
                 ),
-                body: _localized(
-                  en: 'Someone wants to rent your item.',
-                  ko: '회원님 물건을 대여하고 싶어 하는 사용자가 있습니다.',
-                  ja: 'あなたのアイテムをレンタルしたいユーザーがいます。',
-                  id: 'Seseorang ingin menyewa item Anda.',
-                ),
-                reservationId: reservationId,
               );
             }
           },
@@ -119,22 +123,24 @@ class NotificationListener {
             final message = record['message'] as String?;
             final roomId = record['room_id'] as String?;
 
-            service.showChatNotification(
-              title: _localized(
-                en: 'New message',
-                ko: '새 메시지',
-                ja: '新しいメッセージ',
-                id: 'Pesan baru',
+            unawaited(
+              service.showChatNotification(
+                title: _localized(
+                  en: 'New message',
+                  ko: '새 메시지',
+                  ja: '新しいメッセージ',
+                  id: 'Pesan baru',
+                ),
+                body:
+                    message ??
+                    _localized(
+                      en: 'You received an image',
+                      ko: '이미지를 받았습니다',
+                      ja: '画像を受信しました',
+                      id: 'Anda menerima gambar',
+                    ),
+                roomId: roomId,
               ),
-              body:
-                  message ??
-                  _localized(
-                    en: 'You received an image',
-                    ko: '이미지를 받았습니다',
-                    ja: '画像を受信しました',
-                    id: 'Anda menerima gambar',
-                  ),
-              roomId: roomId,
             );
           },
         )
