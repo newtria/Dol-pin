@@ -36,7 +36,16 @@ jobs:
             ${{ runner.os }}-pub-${{ env.FLUTTER_VERSION }}-
 
       - name: Install dependencies
-        run: flutter pub get --enforce-lockfile
+        # Dependabot regenerates pubspec.lock with its own (newer) Dart SDK, so
+        # --enforce-lockfile cannot be reproduced under the pinned FLUTTER_VERSION
+        # and fails with exit 65. Skip enforcement for dependabot PRs; analyze and
+        # test still validate that the bumped dependencies work under our SDK.
+        run: |
+          if [ "${{ github.actor }}" = "dependabot[bot]" ]; then
+            flutter pub get
+          else
+            flutter pub get --enforce-lockfile
+          fi
 
       - name: Analyze
         run: flutter analyze
