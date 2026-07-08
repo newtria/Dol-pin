@@ -7,6 +7,7 @@ void main() {
     late String functionSource;
     late String authSource;
     late String serviceSource;
+    late String edgeClientSource;
 
     setUpAll(() {
       functionSource = File(
@@ -17,6 +18,9 @@ void main() {
       ).readAsStringSync();
       serviceSource = File(
         'lib/data/datasources/gemini_service.dart',
+      ).readAsStringSync();
+      edgeClientSource = File(
+        'lib/data/datasources/gemini_edge_client.dart',
       ).readAsStringSync();
     });
 
@@ -48,8 +52,9 @@ void main() {
     });
 
     test('client sends the current session token when available', () {
+      expect(serviceSource, contains('accessToken'));
       expect(
-        serviceSource,
+        edgeClientSource,
         contains("headers['Authorization'] = 'Bearer \$_accessToken'"),
       );
     });

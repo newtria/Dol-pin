@@ -1,32 +1,23 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 import '../../core/constants/env.dart';
-import '../../core/errors/failures.dart';
 import '../../core/errors/result.dart';
+import 'gemini_edge_client.dart';
+import 'gemini_image_payload_builder.dart';
 import 'supabase_client.dart';
-
-/// Hard cap on image payload sent to the Gemini edge function.
-/// Gemini edge function body limit is ~6MB; raw JPEG from modern phones can
-/// exceed that once base64-encoded (1.33x expansion), so we gate at 4MB raw.
-const int _maxGeminiImageBytes = 4 * 1024 * 1024;
-
-/// Timeout for the single round trip to the Gemini edge function. VLM
-/// inference typically completes in 2–8s; anything beyond 30s indicates a
-/// stuck network path and should surface to the user.
-const Duration _geminiTimeout = Duration(seconds: 30);
 
 final geminiServiceProvider = Provider<GeminiService>((ref) {
   final client = ref.watch(supabaseProvider);
-  return GeminiService(
+  final service = GeminiService(
     supabaseUrl: Env.supabaseUrl,
     supabaseAnonKey: Env.supabaseAnonKey,
     accessToken: client.auth.currentSession?.accessToken,
   );
+  ref.onDispose(service.close);
+  return service;
 });
 
 class GeminiService {
@@ -38,12 +29,15 @@ class GeminiService {
   }) : _functionUrl = '$supabaseUrl/functions/v1/gemini-analyze',
        _supabaseAnonKey = supabaseAnonKey,
        _accessToken = accessToken,
-       _httpClient = httpClient ?? http.Client();
+       _httpClient = httpClient;
 
   final String _functionUrl;
   final String _supabaseAnonKey;
   final String? _accessToken;
-  final http.Client _httpClient;
+  final http.Client? _httpClient;
+  final GeminiImagePayloadBuilder _payloadBuilder =
+      const GeminiImagePayloadBuilder();
+  GeminiEdgeClient? _edgeClient;
 
   /// Analyzes a rental item photo and returns auto-generated tags.
   /// Returns a VLM tag string like "BTS Official Lightstick Ver.4, Black, Good Condition"
@@ -94,68 +88,23 @@ class GeminiService {
     required File imageFile,
     required String prompt,
   }) async {
-    try {
-      final bytes = await imageFile.readAsBytes();
-      if (bytes.length > _maxGeminiImageBytes) {
-        return Fail(
-          ValidationFailure(
-            'Image too large for analysis '
-            '(${(bytes.length / 1024 / 1024).toStringAsFixed(1)}MB, '
-            'max ${_maxGeminiImageBytes ~/ 1024 ~/ 1024}MB)',
-          ),
-        );
-      }
-      final base64Image = base64Encode(bytes);
-      final mimeType = _getMimeType(imageFile.path);
-
-      final headers = <String, String>{
-        'Content-Type': 'application/json',
-        'apikey': _supabaseAnonKey,
-      };
-      if (_accessToken != null) {
-        headers['Authorization'] = 'Bearer $_accessToken';
-      }
-
-      final response = await _httpClient
-          .post(
-            Uri.parse(_functionUrl),
-            headers: headers,
-            body: jsonEncode({
-              'image': base64Image,
-              'mimeType': mimeType,
-              'prompt': prompt,
-            }),
-          )
-          .timeout(_geminiTimeout);
-
-      if (response.statusCode != 200) {
-        return Fail(
-          ServerFailure('Gemini analysis failed (${response.statusCode})'),
-        );
-      }
-
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final resultText = data['result'] as String?;
-
-      if (resultText == null || resultText.isEmpty) {
-        return const Fail(ServerFailure('No analysis result returned'));
-      }
-
-      return Success(resultText);
-    } on TimeoutException {
-      return const Fail(NetworkFailure('Gemini request timed out'));
-    } catch (e) {
-      return Fail(mapException(e));
+    final payloadResult = await _payloadBuilder.build(imageFile);
+    if (payloadResult.isFailure) {
+      return Fail(payloadResult.failure);
     }
+    return _client.analyze(payload: payloadResult.value, prompt: prompt);
   }
 
-  String _getMimeType(String path) {
-    final ext = path.split('.').last.toLowerCase();
-    return switch (ext) {
-      'png' => 'image/png',
-      'gif' => 'image/gif',
-      'webp' => 'image/webp',
-      _ => 'image/jpeg',
-    };
+  GeminiEdgeClient get _client {
+    return _edgeClient ??= GeminiEdgeClient(
+      functionUrl: _functionUrl,
+      supabaseAnonKey: _supabaseAnonKey,
+      accessToken: _accessToken,
+      httpClient: _httpClient,
+    );
+  }
+
+  void close() {
+    _edgeClient?.close();
   }
 }
