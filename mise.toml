@@ -1,2 +1,2 @@
 [tools]
-"asdf:mise-plugins/mise-flutter" = "latest"
+flutter = "3.44.8"
