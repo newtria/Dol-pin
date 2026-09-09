@@ -821,7 +821,7 @@ export type Database = {
           lender_grade: string | null
           locale: string | null
           nickname: string
-          phone: string
+          phone: string | null
           profile_image: string | null
           region: string | null
           response_rate: number | null
@@ -839,7 +839,7 @@ export type Database = {
           lender_grade?: string | null
           locale?: string | null
           nickname: string
-          phone: string
+          phone?: string | null
           profile_image?: string | null
           region?: string | null
           response_rate?: number | null
@@ -857,7 +857,7 @@ export type Database = {
           lender_grade?: string | null
           locale?: string | null
           nickname?: string
-          phone?: string
+          phone?: string | null
           profile_image?: string | null
           region?: string | null
           response_rate?: number | null
@@ -974,7 +974,7 @@ export type Database = {
           lender_grade: string | null
           locale: string | null
           nickname: string
-          phone: string
+          phone: string | null
           profile_image: string | null
           region: string | null
           response_rate: number | null
