@@ -1,0 +1,8 @@
+{
+  "name": "@dolpin/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {".": "./src/index.ts", "./database": "./src/database.ts"},
+  "dependencies": {"zod": "4.5.4"}
+}

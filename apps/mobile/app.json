@@ -1,0 +1,9 @@
+{
+  "expo": {
+    "name": "dol-pin", "slug": "dol-pin", "scheme": "dolpin",
+    "version": "0.1.0", "orientation": "portrait", "userInterfaceStyle": "dark",
+    "plugins": ["expo-router"],
+    "ios": {"supportsTablet": false},
+    "web": {"bundler": "metro"}
+  }
+}

@@ -26,5 +26,23 @@ enabled = true
 site_url = "http://127.0.0.1:3000"
 additional_redirect_urls = ["http://127.0.0.1:3000/auth/callback"]
 
+# Local-only SMS fixtures. Do not apply this configuration to a hosted project.
+[auth.sms]
+enable_signup = true
+enable_confirmations = true
+
+[auth.sms.test_otp]
+821055501001 = "123456"
+821055501002 = "123456"
+821055501003 = "123456"
+
+# The CLI requires a provider to enable phone auth even for test_otp. These are
+# deliberately invalid local fixture credentials; only the test numbers work.
+[auth.sms.twilio]
+enabled = true
+account_sid = "AC00000000000000000000000000000000"
+message_service_sid = "MG00000000000000000000000000000000"
+auth_token = "local-test-only-not-a-provider-credential"
+
 [functions.resolve-dispute]
 verify_jwt = false

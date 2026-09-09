@@ -11,6 +11,11 @@ build/
 !.env.example
 supabase/.branches/
 supabase/.temp/
+node_modules/
+node_modules
+.expo/
+dist/
+*.tsbuildinfo
 *.g.dart.bak
 
 # Planning / design documents — kept locally, not in VCS.
