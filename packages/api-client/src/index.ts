@@ -1,8 +1,11 @@
+import {RentalRequestRejected} from './pending-rentals.ts';
+export {createPendingRentals, RentalRequestRejected, type RentalRequest} from './pending-rentals.ts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {itemInput, type ItemInput, type Database} from '@dolpin/contracts';
 
 export type Client = SupabaseClient<Database>;
 export type Item = Database['public']['Tables']['rental_items']['Row'];
+export type RentalCursor = {createdAt:string;id:string};
 export type Concert = Database['public']['Tables']['concerts']['Row'];
 
 function value<T>(result: {data: T; error: {message: string; code?:string} | null}): T {
@@ -17,14 +20,28 @@ export function createApi(client: Client) {
       if(error || data?.error) throw new Error(data?.error ?? '결제창을 준비하지 못했습니다. 설정과 예약 상태를 확인해 주세요.');
       return data;
     },
-    async rentals() {
-      return value(await client.from('reservations').select('*, item:rental_items!reservations_item_id_fkey(title)').order('created_at', {ascending:false}).limit(50));
+    async rentals({cursor,activeOnly=false}: {cursor?:RentalCursor;activeOnly?:boolean} = {}) {
+      const size=50;
+      let query=client.from('reservations').select('*, item:rental_items!reservations_item_id_fkey(title)')
+        .order('created_at',{ascending:false}).order('id',{ascending:false});
+      if(activeOnly)query=query.in('status',['requested','accepted','pending','paid','picked_up','returned','disputed']);
+      if(cursor)query=query.or(`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`);
+      const rows=value(await query.limit(size+1))??[];
+      const last=rows[size-1];
+      return {rows:rows.slice(0,size),nextCursor:rows.length>size&&last?.created_at?{createdAt:last.created_at,id:last.id}:undefined};
     },
     async rental(id:string) {
       return value(await client.from('reservations').select('*, item:rental_items!reservations_item_id_fkey(title)').eq('id',id).single());
     },
     async requestRental(input:Database['public']['Functions']['request_rental']['Args']) {
-      const rental=value(await client.rpc('request_rental',input));
+      const result=await client.rpc('request_rental',input);
+      if(result.error) {
+        // PostgreSQL errors are definitive transaction failures; transport,
+        // gateway and ambiguous responses retain the recovery request.
+        const rejected=result.status>=400 && result.status<500 && /^[0-9A-Z]{5}$/.test(result.error.code??'');
+        throw rejected?new RentalRequestRejected(result.error.message):new Error(result.error.message);
+      }
+      const rental=result.data;
       if (!rental) throw new Error('예약 결과를 확인하지 못했습니다. 같은 요청으로 재시도해 주세요.');
       return rental;
     },

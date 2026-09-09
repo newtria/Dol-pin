@@ -5,7 +5,9 @@
   "scripts": {
     "mobile": "npm run start -w @dolpin/mobile",
     "typecheck": "tsc --noEmit",
-    "test:db": "bash scripts/test-db.sh"
+    "test:db": "bash scripts/test-db.sh",
+    "test:recovery": "node --experimental-strip-types --test scripts/test-rental-recovery.mjs",
+    "test:recovery:local": "node --experimental-strip-types scripts/check-local-rental-recovery.mjs"
   },
   "devDependencies": {
     "typescript": "~6.0.3",
