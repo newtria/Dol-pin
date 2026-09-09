@@ -14,11 +14,12 @@ export COLIMA_CACHE_HOME="$DOLPIN_RUNTIME_ROOT/cache/colima"
 export LIMA_HOME="$COLIMA_HOME/_lima"
 export TMPDIR="$DOLPIN_RUNTIME_ROOT/tmp"
 export npm_config_cache="$DOLPIN_RUNTIME_ROOT/cache/npm"
+export PATH="$DOLPIN_RUNTIME_ROOT/bin:$PATH"
 mkdir -p "$COLIMA_HOME" "$COLIMA_CACHE_HOME" "$TMPDIR" "$npm_config_cache"
 
 case "${1:-}" in
   start)
-    exec colima start dol-pin --cpu 4 --memory 4 --disk 40 --root-disk 12 \
+    exec colima start dol-pin --cpu 4 --memory 3 --disk 40 --root-disk 12 \
       --vm-type vz --runtime docker --activate=false --ssh-config=false
     ;;
   status)

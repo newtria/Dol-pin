@@ -13,6 +13,23 @@ env:
   FLUTTER_VERSION: '3.41.4'
 
 jobs:
+  database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.107.0
+      - name: Start isolated local Supabase
+        run: supabase start -x vector,analytics
+      - name: Rebuild schema from zero
+        run: supabase db reset --local --yes
+      - name: Exercise database authority and RLS
+        run: bash scripts/test-db.sh
+      - name: Stop local services
+        if: always()
+        run: supabase stop
+
   build:
     runs-on: ubuntu-latest
 

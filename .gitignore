@@ -9,6 +9,8 @@ build/
 .env
 .env.*
 !.env.example
+supabase/.branches/
+supabase/.temp/
 *.g.dart.bak
 
 # Planning / design documents — kept locally, not in VCS.
