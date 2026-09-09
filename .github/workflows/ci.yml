@@ -10,7 +10,7 @@ on:
 # happen together with `mise use asdf:mise-plugins/mise-flutter@<version>`
 # so local and CI stay aligned.
 env:
-  FLUTTER_VERSION: '3.41.4'
+  FLUTTER_VERSION: '3.44.8'
 
 jobs:
   database:
