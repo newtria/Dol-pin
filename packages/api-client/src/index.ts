@@ -12,6 +12,11 @@ function value<T>(result: {data: T; error: {message: string; code?:string} | nul
 
 export function createApi(client: Client) {
   return {
+    async preparePayment(reservationId: string, mobile = false): Promise<{checkoutUrl: string}> {
+      const {data,error} = await client.functions.invoke('toss-payment', {body: {action:'prepare',reservationId,mobile}});
+      if(error || data?.error) throw new Error(data?.error ?? '결제창을 준비하지 못했습니다. 설정과 예약 상태를 확인해 주세요.');
+      return data;
+    },
     async rentals() {
       return value(await client.from('reservations').select('*, item:rental_items!reservations_item_id_fkey(title)').order('created_at', {ascending:false}).limit(50));
     },

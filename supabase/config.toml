@@ -24,7 +24,7 @@ port = 55324
 [auth]
 enabled = true
 site_url = "http://127.0.0.1:3000"
-additional_redirect_urls = ["http://127.0.0.1:3000/auth/callback"]
+additional_redirect_urls = ["http://127.0.0.1:3000/auth/callback", "http://localhost:3000/auth/callback", "dolpin://auth/callback"]
 
 # Local-only SMS fixtures. Do not apply this configuration to a hosted project.
 [auth.sms]
@@ -46,3 +46,17 @@ auth_token = "local-test-only-not-a-provider-credential"
 
 [functions.resolve-dispute]
 verify_jwt = false
+
+# Handler validates JWT for prepare; checkout/confirm require a scoped capability.
+[functions.toss-payment]
+verify_jwt = false
+
+[auth.external.google]
+enabled = false # scripts/configure-oauth.mjs
+client_id = "env(GOOGLE_CLIENT_ID)"
+secret = "env(GOOGLE_CLIENT_SECRET)"
+
+[auth.external.apple]
+enabled = false # scripts/configure-oauth.mjs
+client_id = "env(APPLE_CLIENT_ID)"
+secret = "env(APPLE_CLIENT_SECRET)"

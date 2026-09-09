@@ -10,7 +10,7 @@ import {useExploreState} from './explore-state';
 const Context = createContext<{client: Client; api: ReturnType<typeof createApi>; session: Session | null; ready: boolean} | null>(null);
 export function Providers({children}: {children: ReactNode}) {
   const [query] = useState(() => new QueryClient({defaultOptions: {queries: {staleTime: 15000, retry: 1}, mutations: {retry: false}}}));
-  const [client] = useState(() => createClient<Database>(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!));
+  const [client] = useState(() => createClient<Database>(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {auth: {flowType: 'pkce', detectSessionInUrl: false}}));
   const [api] = useState(() => createApi(client));
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);

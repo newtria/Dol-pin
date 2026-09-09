@@ -14,6 +14,6 @@ const storage = {
   removeItem: (name: string) => Platform.OS === 'web' ? Promise.resolve(localStorage.removeItem(name)) : SecureStore.deleteItemAsync(name),
 };
 export const client = createClient<Database>(url, key, {
-  auth: {storage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false},
+  auth: {storage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, flowType: 'pkce'},
 });
 export const api = createApi(client);

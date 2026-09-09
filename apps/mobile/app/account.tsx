@@ -1,3 +1,4 @@
+import {signInWithSocial} from '../src/oauth';
 import {useState} from 'react';
 import {ScrollView, Text, View} from 'react-native';
 import {Controller, useForm} from 'react-hook-form';
@@ -16,6 +17,7 @@ export default function Account() {
   const queries = useQueryClient();
   const form = useForm({resolver: zodResolver(phoneInput), defaultValues: {phone: '+82'}});
   const profile = useQuery({queryKey: ['profile', session?.user.id], queryFn: () => api.profile(session!.user.id), enabled: !!session});
+  const oauth = useMutation({mutationFn: signInWithSocial});
   const send = useMutation({mutationFn: async ({phone}: {phone: string}) => {
     const {error} = await client.auth.signInWithOtp({phone}); if (error) throw error; setSentPhone(phone);
   }});
@@ -25,7 +27,7 @@ export default function Account() {
   const logout = useMutation({mutationFn: async () => {const {error} = await client.auth.signOut(); if (error) throw error; setSentPhone(undefined); setToken('');}});
   const createProfile = useMutation({mutationFn: () => api.ensureProfile(nickname), onSuccess: () => queries.invalidateQueries({queryKey: ['profile', session?.user.id]})});
   return <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-    <Text style={s.title}>{session ? '내 계정' : '전화번호로 로그인'}</Text>
+    <Text style={s.title}>{session ? '내 계정' : '로그인'}</Text>
     {!ready ? <Text style={s.muted}>계정을 확인하고 있습니다.</Text> : session ? <View style={{gap: 20}}>
       <Text style={s.body}>{profile.data?.nickname ?? '로그인되었습니다.'}</Text>
       <Text style={s.muted}>{session.user.phone}</Text>
@@ -33,12 +35,13 @@ export default function Account() {
       <Button label="로그아웃" onPress={() => logout.mutate()} disabled={logout.isPending}/>
       <ErrorText error={profile.error ?? logout.error ?? createProfile.error}/>
     </View> : <View style={{gap: 20}}>
+      <Button label="Google로 계속하기" onPress={() => oauth.mutate('google')} disabled={oauth.isPending}/><Button label="Apple로 계속하기" onPress={() => oauth.mutate('apple')} disabled={oauth.isPending}/>
       <Text style={s.muted}>거래에 사용할 전화번호를 인증해 주세요.</Text>
       <Controller control={form.control} name="phone" render={({field: {value, onChange}}) => <Field label="전화번호" value={value} onChangeText={onChange} keyboardType="phone-pad" autoComplete="tel"/>}/>
       <ErrorText error={form.formState.errors.phone?.message}/>
       <Button label="인증번호 받기" onPress={form.handleSubmit(v => send.mutate(v))} disabled={send.isPending}/>
       {sentPhone ? <><Field label="인증번호" value={token} onChangeText={setToken} keyboardType="number-pad" autoComplete="sms-otp"/><Button label="로그인" onPress={() => verify.mutate()} disabled={verify.isPending || token.length !== 6}/></> : null}
-      <ErrorText error={send.error ?? verify.error}/>
+      <ErrorText error={oauth.error ?? send.error ?? verify.error}/>
     </View>}
   </ScrollView>;
 }
