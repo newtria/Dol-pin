@@ -17,7 +17,7 @@ export function Providers({children}: {children: ReactNode}) {
   useEffect(() => {
     let previous: string | undefined;
     const {data} = client.auth.onAuthStateChange((_event, next) => {
-      if (previous !== next?.user.id) {query.clear(); useExploreState.getState().clear(); useRentalDrafts.getState().clear();}
+      if (previous !== next?.user.id) {query.clear(); useExploreState.getState().clear(); useRentalDrafts.getState().ensureOwner(next?.user.id??null);}
       previous = next?.user.id; setSession(next); setReady(true);
     });
     return () => data.subscription.unsubscribe();
