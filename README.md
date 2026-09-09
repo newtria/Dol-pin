@@ -6,6 +6,7 @@ K-pop 콘서트에서 사용하는 한정된 품목을 개인 간 빌려 쓰는 
 Flutter 클라이언트를 React Native + Expo로 전환하고, Next.js 소비자 웹을
 같은 Supabase backend에 연결하는 재편 작업입니다. 기존 서버 통제를 감사해
 보존하면서 예약 수락, 거래조건 고정, 권한과 복구의 공백을 보완합니다.
+현재 거래 통화는 한국 원화(KRW)입니다.
 
 ## Currently implemented
 
@@ -22,7 +23,8 @@ Flutter 클라이언트를 React Native + Expo로 전환하고, Next.js 소비�
 **전체 거래 서비스는 아직 출시 가능한 상태가 아닙니다.** 새 클라이언트의
 결제·인수·반납·환불과 운영 복구는 아래 Planned 범위입니다.
 기존 Flutter/PortOne 구현은 보존되어 있으나, 존재하는 코드와 새 구조에서
-검증한 기능을 동일하게 취급하지 않습니다.
+검증한 기능을 동일하게 취급하지 않습니다. 기존 운영자 분쟁 해결 Edge Function도
+보존하지만 새 `/ops` 권한·복구 경로에는 아직 연결하지 않았습니다.
 
 검증은 로컬 Supabase의 실제 Auth/Storage/PostgreSQL, iPhone 17e 시뮬레이터,
 Next.js production 브라우저에서 수행했습니다. 화면의 상품·계정은 합성
@@ -63,6 +65,8 @@ PortOne V1/V2는 [비교 ADR](docs/adr/004-portone-version-investigation.md)에
 
 ## Planned
 
+- 기존 Google·Apple OAuth 이식과 OAuth 사용자 프로필 경로
+- 준비된 토스페이먼츠 설정 확인 후 직접 연동/PortOne 경유 방식 확정
 - 새 클라이언트의 결제와 앱 복귀, 검증된 웹훅 처리
 - 금융 작업별 식별자·재시도·PG/DB 불일치 복구
 - 반납 신고와 수령 확인 분리, 비공개 증빙, 보증금 환불
