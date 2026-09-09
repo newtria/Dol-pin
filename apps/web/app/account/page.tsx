@@ -1,4 +1,5 @@
 'use client';
+import {SocialButtons} from '@/components/social-buttons';
 import {useState} from 'react';
 import {useForm} from 'react-hook-form';
 import {zodResolver} from '@hookform/resolvers/zod';
@@ -12,6 +13,7 @@ import {Field, FieldGroup, FieldLabel, FieldError} from '@/components/ui/field';
 
 export default function Account() {
   const {client, api, session, ready} = useApi();
+  const [phoneOpen,setPhoneOpen]=useState(false);
   const [sentPhone, setSentPhone] = useState(''); const [token, setToken] = useState(''); const [nickname, setNickname] = useState('');
   const queries = useQueryClient();
   const form = useForm({resolver: zodResolver(phoneInput), defaultValues: {phone: '+82'}});
@@ -22,14 +24,17 @@ export default function Account() {
   const logout = useMutation({mutationFn: async () => {const {error} = await client.auth.signOut(); if (error) throw error; setToken(''); setSentPhone('');}});
   const create = useMutation({mutationFn: () => api.ensureProfile(nickname), onSuccess: () => queries.invalidateQueries({queryKey: ['profile', session?.user.id]})});
   if (!ready) return <p>계정을 확인하고 있습니다.</p>;
-  return <section className="mx-auto flex max-w-md flex-col gap-8"><h1 className="text-3xl font-bold">{session ? '내 계정' : '로그인'}</h1>
+  return <section className="mx-auto flex w-full max-w-[340px] flex-col gap-6 pb-12 pt-6">{session ? <h1 className="text-3xl font-bold">내 계정</h1> : null}
     {session ? <><p>{profile.data?.nickname ?? '로그인되었습니다.'}</p><p className="text-muted-foreground">{session.user.phone}</p>{!profile.isPending && !profile.data ? <FieldGroup><Field><FieldLabel htmlFor="nickname">닉네임</FieldLabel><Input id="nickname" value={nickname} onChange={e => setNickname(e.target.value)}/></Field><Button onClick={() => create.mutate()} disabled={create.isPending || nickname.trim().length < 2}>프로필 만들기</Button></FieldGroup> : null}<Button onClick={() => logout.mutate()} disabled={logout.isPending}>로그아웃</Button><Failure error={profile.error ?? create.error ?? logout.error}/></> : <>
-      <Button onClick={() => oauth.mutate('kakao')} disabled={oauth.isPending}>카카오로 계속하기</Button><Button onClick={() => oauth.mutate('custom:naver')} disabled={oauth.isPending}>네이버로 계속하기</Button>
-      <Button onClick={() => oauth.mutate('google')} disabled={oauth.isPending}>Google로 계속하기</Button><Button onClick={() => oauth.mutate('apple')} disabled={oauth.isPending}>Apple로 계속하기</Button>
-      <p className="text-muted-foreground">거래에 사용할 전화번호를 인증해 주세요.</p>
+      <div className="pb-3"><p className="text-lg font-extrabold tracking-tight">dol-pin</p><h1 className="mb-3 mt-7 text-[32px] font-bold leading-[1.3] tracking-[-1.2px]">콘서트 준비,<br/>가볍게 시작하세요.</h1><p className="text-[15px] leading-6 text-[#98989f]">내 계정으로 로그인하고<br/>필요한 물품을 빌려보세요.</p></div>
+      <SocialButtons onClick={provider=>oauth.mutate(provider)} disabled={oauth.isPending}/>
+      <Failure error={oauth.error}/>
+      <div className="mt-1 border-t border-[#29292c] pt-5"><button type="button" aria-expanded={phoneOpen} onClick={()=>setPhoneOpen(!phoneOpen)} className="w-full cursor-pointer py-3 text-center text-sm text-[#b5b5bc]">{phoneOpen?'전화번호 로그인 닫기':'전화번호로 로그인'}</button></div>
+      {phoneOpen ? <>
       <form onSubmit={form.handleSubmit(value => send.mutate(value))}><FieldGroup><Field data-invalid={!!form.formState.errors.phone}><FieldLabel htmlFor="phone">전화번호</FieldLabel><Input id="phone" type="tel" autoComplete="tel" aria-invalid={!!form.formState.errors.phone} {...form.register('phone')}/><FieldError errors={[form.formState.errors.phone]}/></Field><Button type="submit" disabled={send.isPending}>인증번호 받기</Button></FieldGroup></form>
       {sentPhone ? <form onSubmit={e => {e.preventDefault(); verify.mutate();}}><FieldGroup><Field><FieldLabel htmlFor="otp">인증번호</FieldLabel><Input id="otp" inputMode="numeric" autoComplete="one-time-code" value={token} onChange={e => setToken(e.target.value)}/></Field><Button disabled={verify.isPending || token.length !== 6}>로그인</Button></FieldGroup></form> : null}
-      <Failure error={oauth.error ?? send.error ?? verify.error}/>
+      <Failure error={send.error ?? verify.error}/>
+      </> : null}
     </>}
   </section>;
 }
