@@ -3,6 +3,7 @@ import {AppState} from 'react-native';
 import type {Session} from '@supabase/supabase-js';
 import {useQueryClient} from '@tanstack/react-query';
 import {client} from './client';
+import {useRentalDrafts} from './rental-drafts';
 import {useExploreState} from './state';
 
 const Context = createContext<{session: Session | null; ready: boolean}>({session: null, ready: false});
@@ -16,7 +17,7 @@ export function SessionProvider({children}: {children: ReactNode}) {
     let lastId: string | undefined;
     const {data: {subscription}} = client.auth.onAuthStateChange((_event, next) => {
       if (!active) return;
-      if (lastId !== next?.user.id) {queries.clear(); useExploreState.getState().clear();}
+      if (lastId !== next?.user.id) {queries.clear(); useExploreState.getState().clear(); useRentalDrafts.getState().clear();}
       lastId = next?.user.id; setSession(next); setReady(true);
     });
     const appState = AppState.addEventListener('change', state => {

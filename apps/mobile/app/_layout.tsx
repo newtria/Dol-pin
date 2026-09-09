@@ -10,5 +10,8 @@ export default function Layout() {
     <Stack.Screen name="account" options={{title: '계정', headerBackTitle: '탐색'}}/>
     <Stack.Screen name="items/[id]" options={{title: '물품 상세', headerBackTitle: '탐색'}}/>
     <Stack.Screen name="items/new" options={{title: '물품 등록', headerBackTitle: '탐색'}}/>
+    <Stack.Screen name="rentals/index" options={{title:'내 거래'}}/>
+    <Stack.Screen name="rentals/new" options={{title:'예약 요청'}}/>
+    <Stack.Screen name="rentals/[id]" options={{title:'거래 상세'}}/>
   </Stack></SessionProvider></QueryClientProvider>;
 }

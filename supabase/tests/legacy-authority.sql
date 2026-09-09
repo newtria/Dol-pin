@@ -13,11 +13,11 @@ VALUES
  ('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001',
   'lightstick', '콘서트 응원봉 fixture', ARRAY['https://example.invalid/fixture.png'], 10000, 'KRW', 30000, 'direct');
 
-SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000002', true);
 SELECT set_config('test.reservation_id',
  (public.create_reservation_intent('20000000-0000-4000-8000-000000000001',
  CURRENT_DATE + 1, CURRENT_DATE + 3)).id::text, true);
+SET LOCAL ROLE authenticated;
 
 DO $$
 DECLARE r public.reservations%ROWTYPE; changed integer; result jsonb;
@@ -37,8 +37,8 @@ BEGIN
  IF result->>'ok' IS DISTINCT FROM 'false' THEN RAISE EXCEPTION 'unpaid pickup was allowed'; END IF;
  BEGIN
    PERFORM public.create_reservation_intent(r.item_id, CURRENT_DATE + 1, CURRENT_DATE + 3);
-   RAISE EXCEPTION 'overlap accepted';
- EXCEPTION WHEN exclusion_violation THEN NULL;
+   RAISE EXCEPTION 'legacy creation bypass was allowed';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
  END;
 END $$;
 

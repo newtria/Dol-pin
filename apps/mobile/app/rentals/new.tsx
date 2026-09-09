@@ -1,0 +1,32 @@
+import {useState} from 'react';
+import {ScrollView,Text} from 'react-native';
+import {router,useLocalSearchParams} from 'expo-router';
+import {randomUUID} from 'expo-crypto';
+import {Controller,useForm} from 'react-hook-form';
+import {zodResolver} from '@hookform/resolvers/zod';
+import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
+import {rentalPeriodInput,koreaTime,formatWon} from '@dolpin/contracts';
+import {api} from '../../src/client';
+import {useRentalDrafts} from '../../src/rental-drafts';
+import {useSession} from '../../src/session';
+import {Field,Button,ErrorText,s} from '../../src/ui';
+export default function RequestRental() {
+ const {itemId}=useLocalSearchParams<{itemId:string}>(); const {session}=useSession();
+ const queries=useQueryClient(); const draft=useRentalDrafts.getState().drafts[itemId]; const [requestId,setRequestId]=useState(()=>draft?.requestId??randomUUID());
+ const item=useQuery({queryKey:['item',itemId],queryFn:()=>api.item(itemId)});
+ const form=useForm({resolver:zodResolver(rentalPeriodInput),defaultValues:{startsAt:draft?.startsAt??'',endsAt:draft?.endsAt??''}});
+ const request=useMutation({mutationFn:async(v:{startsAt:string;endsAt:string})=>{
+   if (!item.data?.updated_at) throw new Error('상품을 다시 확인해 주세요.');
+   return api.requestRental({p_item_id:itemId,p_starts_at:koreaTime(v.startsAt),p_ends_at:koreaTime(v.endsAt),p_item_version:item.data.updated_at,p_request_id:requestId});
+ },onSuccess:r=>{useRentalDrafts.getState().removeDraft(itemId);void queries.invalidateQueries({queryKey:['rentals']});router.replace(`/rentals/${r.id}`);}});
+ if (!session) return <ScrollView contentContainerStyle={s.content}><Text style={s.title}>예약하려면 로그인해 주세요</Text><Button label="로그인" onPress={()=>router.push('/account')}/></ScrollView>;
+ return <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+  <Text style={s.title}>대여 기간 선택</Text><Text style={s.heading}>{item.data?.title}</Text>
+  {item.data?<Text style={s.muted}>{formatWon(item.data.daily_price)} / 24시간 · 보증금 {formatWon(item.data.deposit)}</Text>:null}
+  <Text style={s.body}>한국 시간 기준으로 입력해 주세요. 24시간 미만은 1일 요금이며, 반납 시각까지의 이용 시간을 올림해 계산합니다.</Text>
+  {(['startsAt','endsAt'] as const).map(name=><Controller key={name} control={form.control} name={name} render={({field:{value,onChange}})=><><Field label={name==='startsAt'?'시작 일시':'반납 일시'} placeholder="2026-09-20 10:00" value={value} onChangeText={v=>{onChange(v);const nextId=randomUUID();setRequestId(nextId);useRentalDrafts.getState().setDraft(itemId,{...form.getValues(),[name]:v,requestId:nextId});}} autoCapitalize="none" editable={!request.isPending}/><ErrorText error={form.formState.errors[name]?.message}/></>}/>)}
+  <Text style={s.muted}>예약 요청 후 대여자가 수락하면 결제할 수 있습니다. 요청만으로 물품이 확보되지는 않습니다.</Text>
+  <Button label="예약 요청" onPress={form.handleSubmit(v=>request.mutate(v))} disabled={request.isPending||!item.data}/>
+  <ErrorText error={item.error??request.error}/>
+ </ScrollView>;
+}

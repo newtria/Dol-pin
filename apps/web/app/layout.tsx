@@ -8,7 +8,7 @@ export default function Layout({children}: {children: React.ReactNode}) {
   return <html lang="ko"><body><Providers>
     <header className="border-b"><nav aria-label="주 메뉴" className="mx-auto flex min-h-20 max-w-[1440px] flex-wrap items-center gap-3 px-4 py-4 sm:gap-8 sm:px-6 lg:px-12">
       <Link href="/" className="text-3xl font-bold tracking-tight">dol-pin</Link>
-      <Link href="/items">물품 탐색</Link><Link href="/account">계정</Link>
+      <Link href="/items">물품 탐색</Link><Link href="/rentals">내 거래</Link><Link href="/account">계정</Link>
       <Button asChild className="ml-auto"><Link href="/items/new">내 물품 등록</Link></Button>
     </nav></header>
     <main className="mx-auto max-w-[1440px] px-6 py-10 lg:px-12">{children}</main>

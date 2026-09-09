@@ -4,6 +4,7 @@ import {createClient, type Session} from '@supabase/supabase-js';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {createApi, type Client} from '@dolpin/api-client';
 import type {Database} from '@dolpin/contracts';
+import {useRentalDrafts} from './rental-drafts';
 import {useExploreState} from './explore-state';
 
 const Context = createContext<{client: Client; api: ReturnType<typeof createApi>; session: Session | null; ready: boolean} | null>(null);
@@ -16,7 +17,7 @@ export function Providers({children}: {children: ReactNode}) {
   useEffect(() => {
     let previous: string | undefined;
     const {data} = client.auth.onAuthStateChange((_event, next) => {
-      if (previous !== next?.user.id) {query.clear(); useExploreState.getState().clear();}
+      if (previous !== next?.user.id) {query.clear(); useExploreState.getState().clear(); useRentalDrafts.getState().clear();}
       previous = next?.user.id; setSession(next); setReady(true);
     });
     return () => data.subscription.unsubscribe();

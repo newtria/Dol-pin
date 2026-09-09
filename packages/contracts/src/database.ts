@@ -276,6 +276,58 @@ export type Database = {
           },
         ]
       }
+      rental_events: {
+        Row: {
+          actor_id: string | null
+          command: string
+          created_at: string
+          from_status: Database["public"]["Enums"]["reservation_status"] | null
+          id: number
+          reservation_id: string
+          to_status: Database["public"]["Enums"]["reservation_status"]
+        }
+        Insert: {
+          actor_id?: string | null
+          command: string
+          created_at?: string
+          from_status?: Database["public"]["Enums"]["reservation_status"] | null
+          id?: never
+          reservation_id: string
+          to_status: Database["public"]["Enums"]["reservation_status"]
+        }
+        Update: {
+          actor_id?: string | null
+          command?: string
+          created_at?: string
+          from_status?: Database["public"]["Enums"]["reservation_status"] | null
+          id?: never
+          reservation_id?: string
+          to_status?: Database["public"]["Enums"]["reservation_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rental_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "public_user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_events_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: false
+            referencedRelation: "reservations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rental_items: {
         Row: {
           available_from: string | null
@@ -506,10 +558,13 @@ export type Database = {
       }
       reservations: {
         Row: {
+          accepted_at: string | null
           borrower_id: string
+          client_request_id: string | null
           created_at: string | null
           currency: string
           deposit: number
+          ends_at: string | null
           id: string
           item_id: string
           lender_id: string
@@ -517,23 +572,30 @@ export type Database = {
           payment_action_started_at: string | null
           payment_attempt_merchant_uid: string | null
           payment_attempt_started_at: string | null
+          payment_due_at: string | null
           payment_id: string | null
           payment_provider: string | null
           pickup_confirmed_at: string | null
+          quoted_item_version: string | null
           rental_date: string
           rental_fee: number
           return_confirmed_at: string | null
           return_date: string
           return_photo: string | null
+          starts_at: string | null
           status: Database["public"]["Enums"]["reservation_status"] | null
+          terms_snapshot: Json | null
           total_paid: number
           updated_at: string | null
         }
         Insert: {
+          accepted_at?: string | null
           borrower_id: string
+          client_request_id?: string | null
           created_at?: string | null
           currency: string
           deposit: number
+          ends_at?: string | null
           id?: string
           item_id: string
           lender_id: string
@@ -541,23 +603,30 @@ export type Database = {
           payment_action_started_at?: string | null
           payment_attempt_merchant_uid?: string | null
           payment_attempt_started_at?: string | null
+          payment_due_at?: string | null
           payment_id?: string | null
           payment_provider?: string | null
           pickup_confirmed_at?: string | null
+          quoted_item_version?: string | null
           rental_date: string
           rental_fee: number
           return_confirmed_at?: string | null
           return_date: string
           return_photo?: string | null
+          starts_at?: string | null
           status?: Database["public"]["Enums"]["reservation_status"] | null
+          terms_snapshot?: Json | null
           total_paid: number
           updated_at?: string | null
         }
         Update: {
+          accepted_at?: string | null
           borrower_id?: string
+          client_request_id?: string | null
           created_at?: string | null
           currency?: string
           deposit?: number
+          ends_at?: string | null
           id?: string
           item_id?: string
           lender_id?: string
@@ -565,15 +634,19 @@ export type Database = {
           payment_action_started_at?: string | null
           payment_attempt_merchant_uid?: string | null
           payment_attempt_started_at?: string | null
+          payment_due_at?: string | null
           payment_id?: string | null
           payment_provider?: string | null
           pickup_confirmed_at?: string | null
+          quoted_item_version?: string | null
           rental_date?: string
           rental_fee?: number
           return_confirmed_at?: string | null
           return_date?: string
           return_photo?: string | null
+          starts_at?: string | null
           status?: Database["public"]["Enums"]["reservation_status"] | null
+          terms_snapshot?: Json | null
           total_paid?: number
           updated_at?: string | null
         }
@@ -849,10 +922,13 @@ export type Database = {
           p_return_date: string
         }
         Returns: {
+          accepted_at: string | null
           borrower_id: string
+          client_request_id: string | null
           created_at: string | null
           currency: string
           deposit: number
+          ends_at: string | null
           id: string
           item_id: string
           lender_id: string
@@ -860,15 +936,19 @@ export type Database = {
           payment_action_started_at: string | null
           payment_attempt_merchant_uid: string | null
           payment_attempt_started_at: string | null
+          payment_due_at: string | null
           payment_id: string | null
           payment_provider: string | null
           pickup_confirmed_at: string | null
+          quoted_item_version: string | null
           rental_date: string
           rental_fee: number
           return_confirmed_at: string | null
           return_date: string
           return_photo: string | null
+          starts_at: string | null
           status: Database["public"]["Enums"]["reservation_status"] | null
+          terms_snapshot: Json | null
           total_paid: number
           updated_at: string | null
         }
@@ -907,6 +987,7 @@ export type Database = {
         }
       }
       expire_stale_pending_reservations: { Args: never; Returns: number }
+      expire_unpaid_rentals: { Args: never; Returns: number }
       get_chat_list: {
         Args: { p_user_id: string }
         Returns: {
@@ -936,6 +1017,92 @@ export type Database = {
         }
         Returns: Json
       }
+      request_rental: {
+        Args: {
+          p_ends_at: string
+          p_item_id: string
+          p_item_version: string
+          p_request_id: string
+          p_starts_at: string
+        }
+        Returns: {
+          accepted_at: string | null
+          borrower_id: string
+          client_request_id: string | null
+          created_at: string | null
+          currency: string
+          deposit: number
+          ends_at: string | null
+          id: string
+          item_id: string
+          lender_id: string
+          payment_action: string | null
+          payment_action_started_at: string | null
+          payment_attempt_merchant_uid: string | null
+          payment_attempt_started_at: string | null
+          payment_due_at: string | null
+          payment_id: string | null
+          payment_provider: string | null
+          pickup_confirmed_at: string | null
+          quoted_item_version: string | null
+          rental_date: string
+          rental_fee: number
+          return_confirmed_at: string | null
+          return_date: string
+          return_photo: string | null
+          starts_at: string | null
+          status: Database["public"]["Enums"]["reservation_status"] | null
+          terms_snapshot: Json | null
+          total_paid: number
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "reservations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      respond_to_rental: {
+        Args: { p_action: string; p_reservation_id: string }
+        Returns: {
+          accepted_at: string | null
+          borrower_id: string
+          client_request_id: string | null
+          created_at: string | null
+          currency: string
+          deposit: number
+          ends_at: string | null
+          id: string
+          item_id: string
+          lender_id: string
+          payment_action: string | null
+          payment_action_started_at: string | null
+          payment_attempt_merchant_uid: string | null
+          payment_attempt_started_at: string | null
+          payment_due_at: string | null
+          payment_id: string | null
+          payment_provider: string | null
+          pickup_confirmed_at: string | null
+          quoted_item_version: string | null
+          rental_date: string
+          rental_fee: number
+          return_confirmed_at: string | null
+          return_date: string
+          return_photo: string | null
+          starts_at: string | null
+          status: Database["public"]["Enums"]["reservation_status"] | null
+          terms_snapshot: Json | null
+          total_paid: number
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "reservations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       start_reservation_payment_attempt: {
         Args: { p_merchant_uid: string; p_reservation_id: string }
         Returns: Json
@@ -961,6 +1128,10 @@ export type Database = {
         | "cancelled"
         | "disputed"
         | "resolved"
+        | "requested"
+        | "accepted"
+        | "rejected"
+        | "expired"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1645,6 +1816,10 @@ export const Constants = {
         "cancelled",
         "disputed",
         "resolved",
+        "requested",
+        "accepted",
+        "rejected",
+        "expired",
       ],
     },
   },

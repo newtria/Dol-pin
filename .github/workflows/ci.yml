@@ -37,6 +37,7 @@ jobs:
         run: |
           node scripts/check-local-auth.mjs
           node scripts/check-local-products.mjs
+          node scripts/check-local-rentals.mjs
       - name: Check shared contracts and clients
         run: |
           npm run typecheck

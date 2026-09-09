@@ -23,6 +23,7 @@ export default function Explore() {
         <Chip label="전체" selected={!filter.category} onPress={() => filter.set({category: undefined})}/>
         {categories.map(c => <Chip key={c} label={categoryLabels[c]} selected={filter.category === c} onPress={() => filter.set({category: c})}/>)}</ScrollView>
       <ErrorText error={items.error ?? concerts.error}/>
+      <Button label="내 거래" secondary onPress={()=>router.push('/rentals')}/>
       <Button label="내 물품 등록" secondary onPress={() => router.push('/items/new')}/>
     </View>}
     ItemSeparatorComponent={() => <View style={{height: 12}}/>}

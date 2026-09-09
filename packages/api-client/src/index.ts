@@ -5,13 +5,27 @@ export type Client = SupabaseClient<Database>;
 export type Item = Database['public']['Tables']['rental_items']['Row'];
 export type Concert = Database['public']['Tables']['concerts']['Row'];
 
-function value<T>(result: {data: T; error: {message: string} | null}): T {
-  if (result.error) throw new Error(result.error.message);
+function value<T>(result: {data: T; error: {message: string; code?:string} | null}): T {
+  if (result.error) throw new Error(result.error.code==='23P01' ? '같은 기간에 이미 수락된 예약이 있습니다.' : result.error.message);
   return result.data;
 }
 
 export function createApi(client: Client) {
   return {
+    async rentals() {
+      return value(await client.from('reservations').select('*, item:rental_items!reservations_item_id_fkey(title)').order('created_at', {ascending:false}).limit(50));
+    },
+    async rental(id:string) {
+      return value(await client.from('reservations').select('*, item:rental_items!reservations_item_id_fkey(title)').eq('id',id).single());
+    },
+    async requestRental(input:Database['public']['Functions']['request_rental']['Args']) {
+      const rental=value(await client.rpc('request_rental',input));
+      if (!rental) throw new Error('예약 결과를 확인하지 못했습니다. 같은 요청으로 재시도해 주세요.');
+      return rental;
+    },
+    async respondToRental(id:string, action:'accept'|'reject'|'cancel') {
+      return value(await client.rpc('respond_to_rental',{p_reservation_id:id,p_action:action}));
+    },
     async concerts() {
       return value(await client.from('concerts').select('*').order('concert_date').limit(50));
     },
