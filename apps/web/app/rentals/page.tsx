@@ -6,7 +6,7 @@ import {useApi} from '@/lib/providers';
 import {Failure} from '@/lib/feedback';
 import {Button} from '@/components/ui/button';
 export default function Rentals(){
- const {api,session}=useApi();const rentals=useQuery({queryKey:['rentals'],queryFn:api.rentals,enabled:!!session});
+ const {api,session}=useApi();const rentals=useQuery({queryKey:['rentals'],queryFn:api.rentals,enabled:!!session,refetchInterval:5000});
  if(!session)return <Button asChild><Link href="/account">로그인하고 내 거래 보기</Link></Button>;
  return <section className="flex flex-col gap-8"><h1 className="text-3xl font-bold">내 거래</h1><Failure error={rentals.error}/>
  {rentals.isPending?<p>거래를 불러오고 있습니다.</p>:!rentals.data?.length?<p>아직 거래가 없습니다.</p>:null}

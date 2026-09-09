@@ -2,20 +2,21 @@ import * as WebBrowser from 'expo-web-browser';
 import {useFocusEffect} from 'expo-router';
 import {useCallback} from 'react';
 import {ScrollView,Text} from 'react-native';
-import {useLocalSearchParams} from 'expo-router';
+import {useLocalSearchParams,usePathname} from 'expo-router';
 import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
 import {formatKoreaTime,formatWon,rentalStatusLabels,rentalTitle} from '@dolpin/contracts';
 import {api} from '../../src/client';
 import {useSession} from '../../src/session';
 import {Button,ErrorText,s} from '../../src/ui';
 export default function Rental(){
- const {id}=useLocalSearchParams<{id:string}>(); const {session}=useSession(); const queries=useQueryClient();
- const rental=useQuery({queryKey:['rental',id],queryFn:()=>api.rental(id),enabled:!!session});
- const action=useMutation({mutationFn:(kind:'accept'|'reject'|'cancel')=>api.respondToRental(id,kind),onSuccess:()=>{void queries.invalidateQueries({queryKey:['rental',id]});void queries.invalidateQueries({queryKey:['rentals']});}});
+ const pathname=usePathname(); const {id}=useLocalSearchParams<{id:string}>(); const {session}=useSession(); const queries=useQueryClient();
+ const rental=useQuery({queryKey:['rental',id],queryFn:()=>api.rental(id),enabled:!!session&&pathname===`/rentals/${id}`,refetchInterval:5000});
+ const action=useMutation({mutationFn:(kind:'accept'|'reject'|'cancel')=>api.respondToRental(id,kind),onSettled:()=>{void queries.invalidateQueries({queryKey:['rental',id]});void queries.invalidateQueries({queryKey:['rentals']});}});
  const payment=useMutation({mutationFn:async()=>{const {checkoutUrl}=await api.preparePayment(id,true);await WebBrowser.openBrowserAsync(checkoutUrl);await queries.invalidateQueries({queryKey:['rental',id]});}});
  useFocusEffect(useCallback(()=>{void queries.invalidateQueries({queryKey:['rental',id]});},[id,queries]));
- const r=rental.data;
+ const r=session?rental.data:undefined;
  return <ScrollView contentContainerStyle={s.content}><Text style={s.title}>거래 상세</Text><ErrorText error={rental.error??action.error??payment.error}/>
+ {!session?<Text style={s.muted}>거래를 확인하려면 로그인해 주세요.</Text>:rental.isPending?<Text style={s.muted}>거래를 불러오고 있습니다.</Text>:null}
  {r?<><Text style={s.heading}>{rentalTitle(r)}</Text><Text style={s.body}>{rentalStatusLabels[r.status??'']??'상태 확인 필요'}</Text>
  <Text style={s.body}>{r.starts_at?formatKoreaTime(r.starts_at):r.rental_date} → {r.ends_at?formatKoreaTime(r.ends_at):r.return_date}</Text>
  <Text style={s.body}>대여료 {formatWon(r.rental_fee)}</Text><Text style={s.body}>보증금 {formatWon(r.deposit)}</Text><Text style={s.price}>합계 {formatWon(r.total_paid)}</Text>

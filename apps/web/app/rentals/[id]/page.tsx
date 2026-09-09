@@ -7,10 +7,10 @@ import {Failure} from '@/lib/feedback';
 import {Button} from '@/components/ui/button';
 export default function Rental({params}:{params:Promise<{id:string}>}){
  const {id}=use(params);const {api,session}=useApi();const queries=useQueryClient();
- const rental=useQuery({queryKey:['rental',id],queryFn:()=>api.rental(id),enabled:!!session});
- const action=useMutation({mutationFn:(kind:'accept'|'reject'|'cancel')=>api.respondToRental(id,kind),onSuccess:()=>{void queries.invalidateQueries({queryKey:['rental',id]});void queries.invalidateQueries({queryKey:['rentals']});}});
+ const rental=useQuery({queryKey:['rental',id],queryFn:()=>api.rental(id),enabled:!!session,refetchInterval:5000});
+ const action=useMutation({mutationFn:(kind:'accept'|'reject'|'cancel')=>api.respondToRental(id,kind),onSettled:()=>{void queries.invalidateQueries({queryKey:['rental',id]});void queries.invalidateQueries({queryKey:['rentals']});}});
  const payment=useMutation({mutationFn:async()=>{const {checkoutUrl}=await api.preparePayment(id);window.location.assign(checkoutUrl);}});
- const r=rental.data;
+ const r=session?rental.data:undefined;
  return <section className="mx-auto flex max-w-2xl flex-col gap-8"><h1 className="text-3xl font-bold">거래 상세</h1><Failure error={rental.error??action.error??payment.error}/>
  {!session?<p>거래를 확인하려면 로그인해 주세요.</p>:rental.isPending?<p>거래를 불러오고 있습니다.</p>:null}
  {r?<><h2 className="text-2xl font-semibold">{rentalTitle(r)}</h2><p>{rentalStatusLabels[r.status??'']??'상태 확인 필요'}</p><p>{r.starts_at?formatKoreaTime(r.starts_at):r.rental_date} → {r.ends_at?formatKoreaTime(r.ends_at):r.return_date}</p>
