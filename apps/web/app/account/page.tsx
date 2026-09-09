@@ -16,7 +16,7 @@ export default function Account() {
   const queries = useQueryClient();
   const form = useForm({resolver: zodResolver(phoneInput), defaultValues: {phone: '+82'}});
   const profile = useQuery({queryKey: ['profile', session?.user.id], queryFn: () => api.profile(session!.user.id), enabled: !!session});
-  const oauth = useMutation({mutationFn: async (provider: 'google' | 'apple') => {const {error} = await client.auth.signInWithOAuth({provider, options: {redirectTo: `${window.location.origin}/auth/callback`}}); if (error) throw error;}});
+  const oauth = useMutation({mutationFn: async (provider: 'google' | 'apple' | 'kakao' | 'custom:naver') => {const {error} = await client.auth.signInWithOAuth({provider, options: {redirectTo: `${window.location.origin}/auth/callback`}}); if (error) throw error;}});
   const send = useMutation({mutationFn: async ({phone}: {phone: string}) => {const {error} = await client.auth.signInWithOtp({phone}); if (error) throw error; setSentPhone(phone);}});
   const verify = useMutation({mutationFn: async () => {const {error} = await client.auth.verifyOtp({phone: sentPhone, token, type: 'sms'}); if (error) throw error;}});
   const logout = useMutation({mutationFn: async () => {const {error} = await client.auth.signOut(); if (error) throw error; setToken(''); setSentPhone('');}});
@@ -24,6 +24,7 @@ export default function Account() {
   if (!ready) return <p>계정을 확인하고 있습니다.</p>;
   return <section className="mx-auto flex max-w-md flex-col gap-8"><h1 className="text-3xl font-bold">{session ? '내 계정' : '로그인'}</h1>
     {session ? <><p>{profile.data?.nickname ?? '로그인되었습니다.'}</p><p className="text-muted-foreground">{session.user.phone}</p>{!profile.isPending && !profile.data ? <FieldGroup><Field><FieldLabel htmlFor="nickname">닉네임</FieldLabel><Input id="nickname" value={nickname} onChange={e => setNickname(e.target.value)}/></Field><Button onClick={() => create.mutate()} disabled={create.isPending || nickname.trim().length < 2}>프로필 만들기</Button></FieldGroup> : null}<Button onClick={() => logout.mutate()} disabled={logout.isPending}>로그아웃</Button><Failure error={profile.error ?? create.error ?? logout.error}/></> : <>
+      <Button onClick={() => oauth.mutate('kakao')} disabled={oauth.isPending}>카카오로 계속하기</Button><Button onClick={() => oauth.mutate('custom:naver')} disabled={oauth.isPending}>네이버로 계속하기</Button>
       <Button onClick={() => oauth.mutate('google')} disabled={oauth.isPending}>Google로 계속하기</Button><Button onClick={() => oauth.mutate('apple')} disabled={oauth.isPending}>Apple로 계속하기</Button>
       <p className="text-muted-foreground">거래에 사용할 전화번호를 인증해 주세요.</p>
       <form onSubmit={form.handleSubmit(value => send.mutate(value))}><FieldGroup><Field data-invalid={!!form.formState.errors.phone}><FieldLabel htmlFor="phone">전화번호</FieldLabel><Input id="phone" type="tel" autoComplete="tel" aria-invalid={!!form.formState.errors.phone} {...form.register('phone')}/><FieldError errors={[form.formState.errors.phone]}/></Field><Button type="submit" disabled={send.isPending}>인증번호 받기</Button></FieldGroup></form>

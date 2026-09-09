@@ -60,3 +60,8 @@ secret = "env(GOOGLE_CLIENT_SECRET)"
 enabled = false # scripts/configure-oauth.mjs
 client_id = "env(APPLE_CLIENT_ID)"
 secret = "env(APPLE_CLIENT_SECRET)"
+
+[auth.external.kakao]
+enabled = false # scripts/configure-oauth.mjs
+client_id = "env(KAKAO_CLIENT_ID)"
+secret = "env(KAKAO_CLIENT_SECRET)"

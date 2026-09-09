@@ -15,7 +15,7 @@ export function completeOAuth(url: string) {
   })());
   return exchanges.get(code)!;
 }
-export async function signInWithSocial(provider: 'google' | 'apple') {
+export async function signInWithSocial(provider: 'google' | 'apple' | 'kakao' | 'custom:naver') {
   const redirectTo = Platform.OS === 'web' ? `${window.location.origin}/auth/callback` : 'dolpin://auth/callback';
   const {data, error} = await client.auth.signInWithOAuth({provider, options: {redirectTo, skipBrowserRedirect: true}});
   if (error) throw error;

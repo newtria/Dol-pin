@@ -35,6 +35,7 @@ export default function Account() {
       <Button label="로그아웃" onPress={() => logout.mutate()} disabled={logout.isPending}/>
       <ErrorText error={profile.error ?? logout.error ?? createProfile.error}/>
     </View> : <View style={{gap: 20}}>
+      <Button label="카카오로 계속하기" onPress={() => oauth.mutate('kakao')} disabled={oauth.isPending}/><Button label="네이버로 계속하기" onPress={() => oauth.mutate('custom:naver')} disabled={oauth.isPending}/>
       <Button label="Google로 계속하기" onPress={() => oauth.mutate('google')} disabled={oauth.isPending}/><Button label="Apple로 계속하기" onPress={() => oauth.mutate('apple')} disabled={oauth.isPending}/>
       <Text style={s.muted}>거래에 사용할 전화번호를 인증해 주세요.</Text>
       <Controller control={form.control} name="phone" render={({field: {value, onChange}}) => <Field label="전화번호" value={value} onChangeText={onChange} keyboardType="phone-pad" autoComplete="tel"/>}/>
