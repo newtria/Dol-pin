@@ -1,5 +1,6 @@
 import {readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
+import {setTimeout as delay} from 'node:timers/promises';
 import {randomUUID} from 'node:crypto';
 import {createClient} from '@supabase/supabase-js';
 const env = Object.fromEntries(readFileSync('apps/mobile/.env.local', 'utf8').trim().split('\n').map(line => {
@@ -9,7 +10,9 @@ const url = env.EXPO_PUBLIC_SUPABASE_URL;
 assert.match(url, /^http:\/\/127\.0\.0\.1:/);
 async function actor(phone) {
   const client = createClient(url, env.EXPO_PUBLIC_SUPABASE_ANON_KEY, {auth: {persistSession:false, autoRefreshToken:false}});
-  assert.ifError((await client.auth.signInWithOtp({phone})).error);
+  let sent=await client.auth.signInWithOtp({phone});
+  if(sent.error?.code==='over_sms_send_rate_limit'){await delay(6000);sent=await client.auth.signInWithOtp({phone});}
+  assert.ifError(sent.error);
   const login = await client.auth.verifyOtp({phone, token:'123456', type:'sms'});
   assert.ifError(login.error);
   assert.ifError((await client.rpc('ensure_profile',{p_nickname:'거래 검증'})).error);
