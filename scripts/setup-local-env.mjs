@@ -6,3 +6,6 @@ mkdirSync('apps/mobile', {recursive: true});
 writeFileSync('apps/mobile/.env.local',
   `EXPO_PUBLIC_SUPABASE_URL=${status.API_URL}\nEXPO_PUBLIC_SUPABASE_ANON_KEY=${status.ANON_KEY}\n`, {mode: 0o600});
 console.log('Wrote local public client configuration; no service role key included.');
+mkdirSync('apps/web', {recursive: true});
+writeFileSync('apps/web/.env.local',
+  `NEXT_PUBLIC_SUPABASE_URL=${status.API_URL}\nNEXT_PUBLIC_SUPABASE_ANON_KEY=${status.ANON_KEY}\n`, {mode: 0o600});

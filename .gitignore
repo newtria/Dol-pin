@@ -14,6 +14,9 @@ supabase/.temp/
 node_modules/
 node_modules
 .expo/
+.next/
+.next
+next-env.d.ts
 dist/
 *.tsbuildinfo
 *.g.dart.bak

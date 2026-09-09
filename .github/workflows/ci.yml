@@ -17,6 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.3'
+          cache: npm
+      - run: npm ci
       - uses: supabase/setup-cli@v1
         with:
           version: 2.107.0
@@ -26,6 +31,22 @@ jobs:
         run: supabase db reset --local --yes
       - name: Exercise database authority and RLS
         run: bash scripts/test-db.sh
+      - name: Configure local clients
+        run: node scripts/setup-local-env.mjs
+      - name: Exercise Auth and Storage through public APIs
+        run: |
+          node scripts/check-local-auth.mjs
+          node scripts/check-local-products.mjs
+      - name: Check shared contracts and clients
+        run: |
+          npm run typecheck
+          npm run typecheck -w @dolpin/web
+      - name: Build consumer web
+        run: npm run build -w @dolpin/web
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+      - name: Validate Expo iOS bundle
+        run: npm run export -w @dolpin/mobile
       - name: Stop local services
         if: always()
         run: supabase stop
