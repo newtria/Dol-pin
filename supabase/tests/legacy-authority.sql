@@ -11,7 +11,7 @@ INSERT INTO public.rental_items
  (id, lender_id, category, title, photos, daily_price, currency, deposit, pickup_method)
 VALUES
  ('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001',
-  'lightstick', '콘서트 응원봉 fixture', ARRAY[]::text[], 10000, 'KRW', 30000, 'direct');
+  'lightstick', '콘서트 응원봉 fixture', ARRAY['https://example.invalid/fixture.png'], 10000, 'KRW', 30000, 'direct');
 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000002', true);

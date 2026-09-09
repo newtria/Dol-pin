@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@dolpin/contracts';
+import {itemInput, type ItemInput, type Database} from '@dolpin/contracts';
 
 export type Client = SupabaseClient<Database>;
 export type Item = Database['public']['Tables']['rental_items']['Row'];
@@ -24,6 +24,14 @@ export function createApi(client: Client) {
     },
     async item(id: string) {
       return value(await client.from('rental_items').select('*').eq('id', id).single());
+    },
+    async createItem(input: ItemInput) {
+      const parsed = itemInput.parse(input);
+      const auth = await client.auth.getUser();
+      if (auth.error || !auth.data.user) throw new Error('로그인이 필요합니다.');
+      const item = value(await client.from('rental_items').insert({...parsed, lender_id: auth.data.user.id, currency: 'KRW'}).select().single());
+      if (!item) throw new Error('등록한 물품을 확인하지 못했습니다.');
+      return item;
     },
     async profile(id: string) {
       return value(await client.from('users').select('*').eq('id', id).maybeSingle());

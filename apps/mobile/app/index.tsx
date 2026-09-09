@@ -4,7 +4,7 @@ import {useQuery} from '@tanstack/react-query';
 import {categories, categoryLabels, formatWon} from '@dolpin/contracts';
 import {api} from '../src/client';
 import {useExploreState} from '../src/state';
-import {Page, Field, ErrorText, s, colors} from '../src/ui';
+import {Page, Field, ErrorText, Button, s, colors} from '../src/ui';
 
 export default function Explore() {
   const filter = useExploreState();
@@ -23,6 +23,7 @@ export default function Explore() {
         <Chip label="전체" selected={!filter.category} onPress={() => filter.set({category: undefined})}/>
         {categories.map(c => <Chip key={c} label={categoryLabels[c]} selected={filter.category === c} onPress={() => filter.set({category: c})}/>)}</ScrollView>
       <ErrorText error={items.error ?? concerts.error}/>
+      <Button label="내 물품 등록" secondary onPress={() => router.push('/items/new')}/>
     </View>}
     ItemSeparatorComponent={() => <View style={{height: 12}}/>}
     ListEmptyComponent={items.isPending ? <ActivityIndicator color={colors.primary}/> : <View style={{paddingVertical: 32}}><Text style={s.muted}>조건에 맞는 물품이 아직 없습니다.</Text></View>}
