@@ -6,7 +6,7 @@ const buttons = [
   {provider:'apple',label:'Apple로 로그인',source:require('../assets/auth/apple.png'),ratio:960/156},
 ] as const;
 export function SocialButtons({onPress,disabled}:{onPress:(provider:typeof buttons[number]['provider'])=>void;disabled:boolean}) {
- return <View style={{gap:12}}>{buttons.map(button=><Pressable key={button.provider} accessibilityRole="button" accessibilityLabel={button.label} accessibilityState={{disabled}} disabled={disabled} onPress={()=>onPress(button.provider)} style={{minHeight:48,justifyContent:'center'}}>
-   {button.provider==='google' ? <View style={{height:44,backgroundColor:'#FFFFFF',borderWidth:1,borderColor:'#747775',borderRadius:4,overflow:'hidden',alignItems:'center'}}><View style={{width:180,height:42,overflow:'hidden'}}><Image source={button.source} accessible={false} style={{position:'absolute',left:-4,top:-1,width:188,height:44}} resizeMode="contain"/></View></View> : <Image source={button.source} accessible={false} style={{width:'100%',height:undefined,aspectRatio:button.ratio}} resizeMode="contain"/>}
+ return <View style={{gap:12}}>{buttons.map(button=><Pressable key={button.provider} accessibilityRole="button" accessibilityLabel={button.label} accessibilityState={{disabled}} disabled={disabled} onPress={()=>onPress(button.provider)} style={{height:52,width:'100%',justifyContent:'center',alignItems:'center',borderRadius:8,overflow:'hidden',backgroundColor:button.provider==='kakao'?'#FEE500':button.provider==='custom:naver'?'#03A94D':'#FFFFFF',borderWidth:button.provider==='google'?1:0,borderColor:'#747775'}}>
+   {button.provider==='google' ? <View style={{width:180,height:42,overflow:'hidden'}}><Image source={button.source} accessible={false} style={{position:'absolute',left:-4,top:-1,width:188,height:44}} resizeMode="contain"/></View> : <Image source={button.source} accessible={false} style={{width:'100%',height:52}} resizeMode="contain"/>}
  </Pressable>)}</View>;
 }
