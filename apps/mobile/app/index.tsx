@@ -24,13 +24,13 @@ export default function Explore() {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap: 8}}>
         <Chip label="전체" selected={!filter.category} onPress={() => filter.set({category: undefined})}/>
         {categories.map(c => <Chip key={c} label={categoryLabels[c]} selected={filter.category === c} onPress={() => filter.set({category: c})}/>)}</ScrollView>
-      <ErrorText error={items.error ?? concerts.error}/>
+      <ErrorText error={items.error ?? concerts.error} retrying={items.isFetching || concerts.isFetching} onRetry={()=>{void items.refetch();void concerts.refetch();}}/>
       <Button label="내 거래" secondary onPress={()=>router.push('/rentals')}/>
       <Button label="내 물품 등록" secondary onPress={() => router.push('/items/new')}/>
     </View>}
     ListFooterComponent={items.hasNextPage?<Button label="물품 더 보기" disabled={items.isFetching} onPress={()=>{void items.fetchNextPage();}}/>:null}
     ItemSeparatorComponent={() => <View style={{height: 12}}/>}
-    ListEmptyComponent={items.isPending ? <ActivityIndicator color={colors.primary}/> : <View style={{paddingVertical: 32}}><Text style={s.muted}>조건에 맞는 물품이 아직 없습니다.</Text></View>}
+    ListEmptyComponent={items.isPending ? <ActivityIndicator color={colors.primary}/> : items.isError ? null : <View style={{paddingVertical: 32}}><Text style={s.muted}>조건에 맞는 물품이 아직 없습니다.</Text></View>}
     renderItem={({item}) => <Pressable accessibilityRole="button" accessibilityLabel={item.title} onPress={() => router.push(`/items/${item.id}`)} style={[s.card, s.row]}>
       {item.photos[0] ? <Image source={{uri: item.photos[0]}} style={{width: 100, height: 112, borderRadius: 10}} accessibilityLabel={item.title}/> : null}
       <View style={{flex: 1, gap: 10}}><Text style={s.heading}>{item.title}</Text><Text style={s.price}>{formatWon(item.daily_price)} / 일</Text><Text style={s.muted}>보증금 {formatWon(item.deposit)}</Text></View>

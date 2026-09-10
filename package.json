@@ -19,7 +19,8 @@
     "build:qa": "node scripts/build-qa.mjs",
     "ios:build": "node scripts/ios-preview.mjs build",
     "ios:open": "node scripts/ios-preview.mjs open",
-    "qa:ios": "node scripts/ios-preview.mjs qa"
+    "qa:ios": "node scripts/ios-preview.mjs qa",
+    "test:mobile-errors": "node --experimental-strip-types --test scripts/test-mobile-errors.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

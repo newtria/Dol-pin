@@ -11,7 +11,7 @@ export default function ItemDetail() {
   const item = useQuery({queryKey: ['item', id], queryFn: () => api.item(id)});
   return <ScrollView contentContainerStyle={s.content}>
     {item.isPending ? <ActivityIndicator color={colors.primary}/> : null}
-    <ErrorText error={item.error}/>
+    <ErrorText error={item.error} retrying={item.isFetching} onRetry={()=>{void item.refetch();}}/>
     {item.data ? <>
       {item.data.photos[0] ? <Image source={{uri: item.data.photos[0]}} style={{width: '100%', aspectRatio: 1.2, borderRadius: 12}} accessibilityLabel={item.data.title}/> : null}
       <Text style={s.title}>{item.data.title}</Text><Text style={s.price}>{formatWon(item.data.daily_price)} / 일</Text>

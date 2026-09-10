@@ -8,7 +8,7 @@ import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {phoneInput} from '@dolpin/contracts';
 import {client, api} from '../src/client';
 import {useSession} from '../src/session';
-import {Button, Field, ErrorText, s} from '../src/ui';
+import {Button,ValidationText, Field, ErrorText, s} from '../src/ui';
 
 export default function Account() {
   const {session, ready} = useSession();
@@ -51,7 +51,7 @@ export default function Account() {
       </View>
       {phoneOpen ? <View style={{gap:16,paddingTop:20}}>
       <Controller control={form.control} name="phone" render={({field: {value, onChange}}) => <Field label="전화번호" value={value} onChangeText={onChange} keyboardType="phone-pad" autoComplete="tel"/>}/>
-      <ErrorText error={form.formState.errors.phone?.message}/>
+      <ValidationText error={form.formState.errors.phone?.message}/>
       <Button label="인증번호 받기" onPress={form.handleSubmit(v => send.mutate(v))} disabled={send.isPending}/>
       {sentPhone ? <><Field label="인증번호" value={token} onChangeText={setToken} keyboardType="number-pad" autoComplete="sms-otp"/><Button label="로그인" onPress={() => verify.mutate()} disabled={verify.isPending || token.length !== 6}/></> : null}
       <ErrorText error={send.error ?? verify.error}/>

@@ -10,7 +10,7 @@ export type ConcertCursor = {date:string;id:string};
 export type Concert = Database['public']['Tables']['concerts']['Row'];
 
 function value<T>(result: {data: T; error: {message: string; code?:string} | null}): T {
-  if (result.error) throw new Error(result.error.code==='23P01' ? '같은 기간에 이미 수락된 예약이 있습니다.' : result.error.message);
+  if (result.error) throw Object.assign(new Error(result.error.code==='23P01' ? '같은 기간에 이미 수락된 예약이 있습니다.' : result.error.message), {code: result.error.code});
   return result.data;
 }
 

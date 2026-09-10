@@ -50,6 +50,7 @@ jobs:
         run: |
           npm run test:edge
           npm run test:recovery
+          npm run test:mobile-errors
           npm run test:recovery:local
           npm run test:finance
       - name: Build consumer web

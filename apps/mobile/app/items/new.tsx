@@ -8,7 +8,7 @@ import {useMutation, useQueryClient} from '@tanstack/react-query';
 import {categories, categoryLabels, itemInput, type ItemInput} from '@dolpin/contracts';
 import {api, client} from '../../src/client';
 import {useSession} from '../../src/session';
-import {Button, ErrorText, Field, s} from '../../src/ui';
+import {Button,ValidationText, ErrorText, Field, s} from '../../src/ui';
 
 export default function NewItem() {
   const {session} = useSession();
@@ -49,15 +49,15 @@ export default function NewItem() {
     <Text style={s.muted}>상품 사진은 누구나 볼 수 있습니다. 개인정보나 반납 증빙은 올리지 마세요.</Text>
     <ScrollView horizontal contentContainerStyle={{gap: 12}}>{photos.map(uri => <Image key={uri} source={{uri}} style={{width: 100, height: 100, borderRadius: 12}}/>)}</ScrollView>
     <Button label={uploading ? '사진 업로드 중' : `사진 추가 (${photos.length}/5)`} onPress={() => {void addPhoto();}} disabled={uploading || create.isPending || photos.length >= 5} secondary/>
-    <ErrorText error={photoError ?? form.formState.errors.photos?.message}/>
+    <ErrorText error={photoError}/><ValidationText error={form.formState.errors.photos?.message}/>
     <Controller control={form.control} name="title" render={({field}) => <Field label="상품명" value={field.value} onChangeText={field.onChange}/>}/>
-    <ErrorText error={form.formState.errors.title?.message}/>
+    <ValidationText error={form.formState.errors.title?.message}/>
     <Text style={s.muted}>품목</Text><ScrollView horizontal contentContainerStyle={{gap: 8}}>{categories.map(c => <Button key={c} label={categoryLabels[c]} secondary={category !== c} onPress={() => form.setValue('category', c)}/>)}</ScrollView>
     <Controller control={form.control} name="description" render={({field}) => <Field label="상품 설명" multiline value={field.value} onChangeText={field.onChange}/>}/>
-    <ErrorText error={form.formState.errors.description?.message}/>
+    <ValidationText error={form.formState.errors.description?.message}/>
     <Controller control={form.control} name="pickup_note" render={({field}) => <Field label="인수·반납 장소" value={field.value} onChangeText={field.onChange}/>}/>
-    <ErrorText error={form.formState.errors.pickup_note?.message}/>
-    {(['daily_price', 'deposit'] as const).map(name => <View key={name} style={{gap: 8}}><Controller control={form.control} name={name} render={({field}) => <Field label={name === 'daily_price' ? '하루 대여료 (원)' : '보증금 (원)'} keyboardType="number-pad" value={String(field.value)} onChangeText={v => field.onChange(v === '' ? 0 : Number(v))}/>}/><ErrorText error={form.formState.errors[name]?.message}/></View>)}
+    <ValidationText error={form.formState.errors.pickup_note?.message}/>
+    {(['daily_price', 'deposit'] as const).map(name => <View key={name} style={{gap: 8}}><Controller control={form.control} name={name} render={({field}) => <Field label={name === 'daily_price' ? '하루 대여료 (원)' : '보증금 (원)'} keyboardType="number-pad" value={String(field.value)} onChangeText={v => field.onChange(v === '' ? 0 : Number(v))}/>}/><ValidationText error={form.formState.errors[name]?.message}/></View>)}
     <Text style={s.muted}>직접 인수·반납하는 물품입니다.</Text>
     <Button label={create.isPending ? '등록 중' : '물품 등록'} disabled={create.isPending || uploading} onPress={form.handleSubmit(value => create.mutate(value))}/>
     <ErrorText error={create.error}/>
