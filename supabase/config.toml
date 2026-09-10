@@ -26,6 +26,10 @@ enabled = true
 site_url = "http://127.0.0.1:3000"
 additional_redirect_urls = ["http://127.0.0.1:3000/auth/callback", "http://localhost:3000/auth/callback", "dolpin://auth/callback"]
 
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+
 # Local-only SMS fixtures. Do not apply this configuration to a hosted project.
 [auth.sms]
 enable_signup = true

@@ -1,3 +1,4 @@
+import {EmailAuth} from '../src/email-auth';
 import {SocialButtons} from '../src/social-buttons';
 import {signInWithSocial} from '../src/oauth';
 import {useState} from 'react';
@@ -28,12 +29,12 @@ export default function Account() {
   }});
   const logout = useMutation({mutationFn: async () => {const {error} = await client.auth.signOut(); if (error) throw error; setSentPhone(undefined); setToken('');}});
   const createProfile = useMutation({mutationFn: () => api.ensureProfile(nickname), onSuccess: () => queries.invalidateQueries({queryKey: ['profile', session?.user.id]})});
-  return <ScrollView contentContainerStyle={{paddingHorizontal:28,paddingTop:32,paddingBottom:40,flexGrow:1}} keyboardShouldPersistTaps="handled">
+  return <ScrollView contentContainerStyle={{paddingHorizontal:28,paddingTop:32,paddingBottom:40,flexGrow:1}} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets keyboardDismissMode="on-drag">
     {session ? <Text style={[s.title,{marginBottom:24}]}>내 계정</Text> : null}
     {!ready ? <Text style={s.muted}>계정을 확인하고 있습니다.</Text> : session ? <View style={{gap: 20}}>
       <Text style={s.body}>{profile.data?.nickname ?? '로그인되었습니다.'}</Text>
-      <Text style={s.muted}>{session.user.phone}</Text>
-      {!profile.isPending && !profile.data ? <><Field label="닉네임" value={nickname} onChangeText={setNickname}/><Button label="프로필 만들기" onPress={() => createProfile.mutate()} disabled={nickname.trim().length < 2 || createProfile.isPending}/></> : null}
+      <Text style={s.muted}>{session.user.email ?? session.user.phone}</Text>
+      {!profile.isPending && !profile.isError && !profile.data ? <><Field label="닉네임" value={nickname} onChangeText={setNickname}/><Button label="프로필 만들기" onPress={() => createProfile.mutate()} disabled={nickname.trim().length < 2 || createProfile.isPending}/></> : null}
       <Button label="로그아웃" onPress={() => logout.mutate()} disabled={logout.isPending}/>
       <ErrorText error={profile.error ?? logout.error ?? createProfile.error}/>
     </View> : <View style={{width:'100%',maxWidth:340,alignSelf:'center',flex:1}}>
@@ -42,8 +43,12 @@ export default function Account() {
         <Text style={{color:'#F5F5F5',fontSize:32,fontWeight:'700',letterSpacing:-1.2,lineHeight:41,marginTop:16}}>콘서트 준비,{'\n'}가볍게 시작하세요.</Text>
         <Text style={{color:'#98989F',fontSize:15,lineHeight:23}}>내 계정으로 로그인하고{ '\n'}필요한 물품을 빌려보세요.</Text>
       </View>
+      <EmailAuth/>
+      <View style={{marginTop:24,paddingTop:24,borderTopWidth:1,borderTopColor:'#29292C',gap:16}}>
+      <Text style={[s.muted,{textAlign:'center'}]}>다른 방법으로 로그인</Text>
       <SocialButtons onPress={provider=>oauth.mutate(provider)} disabled={oauth.isPending}/>
       <ErrorText error={oauth.error}/>
+      </View>
       <View style={{marginTop:28,paddingTop:24,borderTopWidth:1,borderTopColor:'#29292C'}}>
         <Pressable accessibilityRole="button" accessibilityState={{expanded:phoneOpen}} onPress={()=>setPhoneOpen(!phoneOpen)} style={{paddingVertical:10}}>
           <Text style={{textAlign:'center',color:'#B5B5BC',fontSize:14}}>{phoneOpen?'전화번호 로그인 닫기':'전화번호로 로그인'}</Text>

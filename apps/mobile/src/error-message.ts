@@ -7,6 +7,10 @@ export function errorMessage(error: unknown): string {
     return '로그인 정보를 불러오지 못했습니다. 앱을 다시 실행해 주세요.';
   if (/network|fetch failed|failed to fetch|internet|timed? ?out|네트워크/i.test(message))
     return '연결이 원활하지 않습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.';
+  if (code === 'invalid_credentials') return '이메일 또는 비밀번호를 확인해 주세요.';
+  if (code === 'email_not_confirmed') return '이메일 확인이 필요합니다. 받은 메일의 링크로 가입을 확인해 주세요.';
+  if (code === 'user_already_exists' || code === 'email_exists') return '가입 정보를 확인해 주세요. 이미 계정이 있다면 로그인해 주세요.';
+  if (code === 'weak_password') return '더 안전한 비밀번호를 사용해 주세요. 길이와 문자 구성을 확인해 주세요.';
   if (code === 'otp_expired' || /token has expired|invalid otp/i.test(message))
     return '인증번호가 올바르지 않거나 만료되었습니다. 새 번호를 받아 다시 입력해 주세요.';
   if (code === 'over_request_rate_limit' || /rate limit|too many requests/i.test(message))

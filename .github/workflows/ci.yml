@@ -40,6 +40,7 @@ jobs:
       - name: Exercise Auth and Storage through public APIs
         run: |
           node scripts/check-local-auth.mjs
+          npm run test:email-auth:local
           node scripts/check-local-products.mjs
           node scripts/check-local-rentals.mjs
       - name: Check shared contracts and clients
@@ -51,6 +52,7 @@ jobs:
           npm run test:edge
           npm run test:recovery
           npm run test:mobile-errors
+          npm run test:email-auth
           npm run test:recovery:local
           npm run test:finance
       - name: Build consumer web
