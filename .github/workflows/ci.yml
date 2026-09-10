@@ -30,7 +30,7 @@ jobs:
           deno-version: v2.x
       - run: npm run check:migrations
       - name: Start isolated local Supabase
-        run: supabase start -x vector,analytics
+        run: supabase start -x vector,logflare
       - name: Rebuild schema from zero
         run: supabase db reset --local --yes
       - name: Exercise database authority and RLS

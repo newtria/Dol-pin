@@ -12,14 +12,18 @@ async function requestRental(page:Page,itemId:string) {
  const start=new Date(Date.now()+8*86400000+9*3600000).toISOString().slice(0,16);
  const end=new Date(Date.now()+8*86400000+13*3600000).toISOString().slice(0,16);
  await page.getByLabel('시작 일시').fill(start);await page.getByLabel('반납 일시').fill(end);
+ await expect(page.getByRole('region',{name:'예상 결제 금액'})).toContainText('총 결제액 35,000원');
  await page.getByRole('button',{name:'예약 요청',exact:true}).click();
  await expect(page).toHaveURL(/\/rentals\/[0-9a-f-]+$/);
- await expect(page.getByText('수락 대기',{exact:true})).toBeVisible();return new URL(page.url()).pathname;
+ await expect(page.getByText('수락 대기',{exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'수락한 거래 조건'})).toHaveCount(0);
+ await expect(page.getByText('빌려주는 분의 수락을 기다리고 있어요')).toBeVisible();return new URL(page.url()).pathname;
 }
 async function accept(lender:Page,borrower:Page,path:string) {
  await lender.goto(path);await lender.getByRole('button',{name:'예약 수락',exact:true}).click();
  await expect(lender.getByText('수락됨',{exact:true})).toBeVisible();
  await expect(borrower.getByRole('button',{name:'결제하기',exact:true})).toBeVisible();
+ await expect(borrower.getByRole('button',{name:'결제 결과 다시 확인',exact:true})).toHaveCount(0);
 }
 async function paymentReturn(page:Page) {
  await page.getByRole('button',{name:'결제하기',exact:true}).click();
@@ -41,9 +45,10 @@ test('lost approval survives closing checkout and recovers from a fresh session'
  try {
   const errors=health(b.page,true);const path=await requestRental(b.page,f.item.id);await accept(l.page,b.page,path);
   await request.post(`${gateway}/__qa/lose-approval`);await paymentReturn(b.page);
-  await expect(b.page.getByText('QA: approval response lost',{exact:true})).toBeVisible();
+  await expect(b.page.getByText('연결이 원활하지 않아 다시 확인 중입니다. 결제 실패로 확정된 상태는 아닙니다.')).toBeVisible();
+  await expect(b.page.getByRole('main').getByRole('alert')).toHaveCount(0);
   await b.context.close();const recovered=await actor(browser,f.borrower,true);fresh=recovered.context;
-  await recovered.page.goto(path);await recovered.page.getByRole('button',{name:'결제 결과 다시 확인',exact:true}).click();
+  await recovered.page.goto(path);
   await expect(recovered.page.getByText('결제 완료',{exact:true})).toBeVisible();
   await expect(recovered.page.getByText('인수·반납 장소: 공연장 2번 출구')).toBeVisible();
   await recovered.page.screenshot({path:test.info().outputPath('recovered-mobile.png'),fullPage:true});
@@ -56,9 +61,16 @@ test('request → accept → pay → pickup → private return → deposit refun
   const errors=[health(b.page),health(l.page)];const path=await requestRental(b.page,f.item.id);await accept(l.page,b.page,path);
   await paymentReturn(b.page);await expect(b.page.getByRole('heading',{name:'결제 완료',exact:true})).toBeVisible();
   await b.page.getByRole('link',{name:'거래로 돌아가기'}).click();
-  await expect(l.page.getByRole('button',{name:'물품 인수 확인'})).toBeVisible();await l.page.getByRole('button',{name:'물품 인수 확인'}).click();
-  await expect(b.page.getByLabel('반납 사진 제출')).toBeVisible();
-  await b.page.getByLabel('반납 사진 제출').setInputFiles({name:'return.png',mimeType:'image/png',buffer:png});
+  await expect(l.page.getByRole('button',{name:'물품을 전달했어요'})).toBeVisible();await l.page.getByRole('button',{name:'물품을 전달했어요'}).click();
+  await expect(b.page.getByLabel('반납 사진 선택')).toBeVisible();
+  await b.page.getByLabel('반납 사진 선택').setInputFiles({name:'return.png',mimeType:'image/png',buffer:png});
+  await expect(b.page.getByAltText('제출할 반납 사진')).toBeVisible();
+  await expect(b.page.getByText('사용 중',{exact:true})).toBeVisible();
+  await expect(l.page.getByRole('button',{name:'반납 수령 확인 · 보증금 반환'})).toHaveCount(0);
+  await b.page.getByRole('button',{name:'사진 제거',exact:true}).click();
+  await expect(b.page.getByRole('button',{name:'반납 제출',exact:true})).toHaveCount(0);
+  await b.page.getByLabel('반납 사진 선택').setInputFiles({name:'replacement.png',mimeType:'image/png',buffer:png});
+  await b.page.getByRole('button',{name:'반납 제출',exact:true}).click();
   await expect(l.page.getByRole('button',{name:'반납 수령 확인 · 보증금 반환'})).toBeVisible();
   await expect(l.page.getByAltText('반납 증빙')).toBeVisible();
   await l.page.getByRole('button',{name:'반납 수령 확인 · 보증금 반환'}).click();
@@ -101,4 +113,60 @@ test('product registration uploads a real photo and persists pickup instructions
   await expect(l.page).toHaveURL(/\/items\/[0-9a-f-]+$/);
   await expect(l.page.getByText('인수·반납 장소: 공연장 3번 출구')).toBeVisible();expect(errors).toEqual([]);
  } finally {await l.context.close();expect((await request.post(`${gateway}/__qa/cleanup`,{data:{tag:f.tag}})).ok()).toBeTruthy();}
+});
+
+test('checkout recovers a lost response automatically without presenting failure',async({browser,request})=>{
+ const f=await seed(request);const b=await actor(browser,f.borrower,true),l=await actor(browser,f.lender);
+ try {
+  const errors=health(b.page,true);const path=await requestRental(b.page,f.item.id);await accept(l.page,b.page,path);
+  await request.post(`${gateway}/__qa/lose-approval`);await paymentReturn(b.page);
+  await expect(b.page.getByRole('heading',{name:'결제 결과 확인 중'})).toBeVisible();
+  await expect(b.page.getByRole('main').getByRole('alert')).toHaveCount(0);
+  await expect(b.page.getByRole('heading',{name:'결제 완료',exact:true})).toBeVisible();
+  await b.page.reload();await expect(b.page.getByRole('heading',{name:'결제 완료',exact:true})).toBeVisible();
+  await b.page.getByRole('link',{name:'거래로 돌아가기'}).click();await expect(b.page).toHaveURL(new RegExp(path+'$'));expect(errors).toEqual([]);
+ }finally{await b.context.close();await l.context.close();expect((await request.post(`${gateway}/__qa/cleanup`,{data:{tag:f.tag}})).ok()).toBeTruthy();}
+});
+
+test('refund requires amount review and an explicit confirmation',async({browser,request})=>{
+ const f=await seed(request);const b=await actor(browser,f.borrower,true),l=await actor(browser,f.lender);
+ try {
+  const errors=health(b.page);const path=await requestRental(b.page,f.item.id);await accept(l.page,b.page,path);await paymentReturn(b.page);
+  await b.page.getByRole('link',{name:'거래로 돌아가기'}).click();
+  await b.page.getByRole('button',{name:'거래 취소 · 전액 환불',exact:true}).click();
+  const review=b.page.getByRole('region',{name:'환불 확인'});await expect(review).toContainText('35,000원');
+  await expect(b.page.getByText('결제 완료',{exact:true})).toBeVisible();
+  await review.getByRole('button',{name:'거래 유지'}).click();await expect(review).toHaveCount(0);
+  await expect(b.page.getByText('결제 완료',{exact:true})).toBeVisible();
+  await b.page.getByRole('button',{name:'거래 취소 · 전액 환불',exact:true}).click();
+  await b.page.screenshot({path:test.info().outputPath('refund-review-mobile.png'),fullPage:true});
+  await review.getByRole('button',{name:'취소하고 35,000원 환불',exact:true}).click();
+  await expect(b.page.getByText('취소됨',{exact:true})).toBeVisible();expect(errors).toEqual([]);
+ }finally{await b.context.close();await l.context.close();expect((await request.post(`${gateway}/__qa/cleanup`,{data:{tag:f.tag}})).ok()).toBeTruthy();}
+});
+
+test('estimated total follows 24 hour boundaries and hides invalid periods',async({browser,request})=>{
+ const f=await seed(request);const b=await actor(browser,f.borrower);
+ try {
+  await b.page.goto(`/items/${f.item.id}/reserve`);
+  const day=new Date(Date.now()+8*86400000).toISOString().slice(0,10),tomorrow=new Date(Date.now()+9*86400000).toISOString().slice(0,10);
+  const summary=b.page.getByRole('region',{name:'예상 결제 금액'});
+  await b.page.getByLabel('시작 일시').fill(`${day}T10:00`);await b.page.getByLabel('반납 일시').fill(`${tomorrow}T10:00`);
+  await expect(summary).toContainText('총 결제액 35,000원');
+  await b.page.getByLabel('반납 일시').fill(`${tomorrow}T10:01`);await expect(summary).toContainText('총 결제액 40,000원');
+  await b.page.getByLabel('반납 일시').fill(`${day}T10:00`);await expect(summary).toHaveCount(0);
+ }finally{await b.context.close();expect((await request.post(`${gateway}/__qa/cleanup`,{data:{tag:f.tag}})).ok()).toBeTruthy();}
+});
+
+test('expired checkout explains the state and provides a working way back',async({browser,request})=>{
+ const f=await seed(request);const b=await actor(browser,f.borrower,true),l=await actor(browser,f.lender);
+ try {
+  const path=await requestRental(b.page,f.item.id);await accept(l.page,b.page,path);
+  await b.page.getByRole('button',{name:'결제하기',exact:true}).click();
+  await expect(b.page.getByRole('button',{name:'토스페이먼츠로 결제'})).toBeVisible();
+  expect((await request.post(`${gateway}/__qa/expire-checkout`,{data:{tag:f.tag}})).ok()).toBeTruthy();
+  await b.page.reload();await expect(b.page.getByRole('heading',{name:'결제 기한이 끝났어요'})).toBeVisible();
+  await expect(b.page.getByRole('button',{name:'토스페이먼츠로 결제'})).toHaveCount(0);
+  await b.page.getByRole('link',{name:'거래로 돌아가기'}).click();await expect(b.page).toHaveURL(new RegExp(path+'$'));
+ }finally{await b.context.close();await l.context.close();expect((await request.post(`${gateway}/__qa/cleanup`,{data:{tag:f.tag}})).ok()).toBeTruthy();}
 });

@@ -28,6 +28,11 @@ Deno.serve({hostname:'127.0.0.1',port:55325},async req=>{
    if(url.pathname==='/__qa/cleanup'&&req.method==='POST') {
     const {tag}=await req.json();const f=fixtures.get(tag);if(f){await f.cleanup();fixtures.delete(tag);}return Response.json({ok:true});
    }
+   if(url.pathname==='/__qa/expire-checkout'&&req.method==='POST') {
+    const {tag}=await req.json();const f=fixtures.get(tag);if(!f)return new Response('Missing fixture',{status:404});
+    await localSql(`UPDATE public.toss_checkouts SET expires_at=now()-interval '1 minute' WHERE reservation_id IN (SELECT id FROM public.reservations WHERE item_id='${f.item.id}');`);
+    return Response.json({ok:true});
+   }
    if(url.pathname==='/__qa/catalog'&&req.method==='POST') {
     const {tag}=await req.json();const f=fixtures.get(tag);if(!f)return new Response('Missing fixture',{status:404});
     checked(await f.lender.client.from('rental_items').insert(Array.from({length:52},(_,i)=>({lender_id:f.lender.id,title:`${tag} page ${String(i).padStart(2,'0')}`,category:'lightstick',photos:f.item.photos,daily_price:5000,deposit:30000,currency:'KRW',pickup_method:'direct'}))));

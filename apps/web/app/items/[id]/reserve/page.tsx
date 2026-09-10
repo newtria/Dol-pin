@@ -4,10 +4,10 @@ import {type RentalRequest} from '@dolpin/api-client';
 import {use,useEffect,useState} from 'react';
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
-import {Controller,useForm} from 'react-hook-form';
+import {Controller,useForm,useWatch} from 'react-hook-form';
 import {zodResolver} from '@hookform/resolvers/zod';
 import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
-import {rentalPeriodInput,koreaTime,formatWon,formatKoreaTime} from '@dolpin/contracts';
+import {rentalEstimate,rentalPeriodInput,koreaTime,formatWon,formatKoreaTime} from '@dolpin/contracts';
 import {useRentalDrafts} from '@/lib/rental-drafts';
 import {useApi} from '@/lib/providers';
 import {Failure} from '@/lib/feedback';
@@ -19,6 +19,9 @@ export default function Reserve({params}:{params:Promise<{id:string}>}) {
  const draft=useRentalDrafts(state=>state.drafts[id]); const [recovery,setRecovery]=useState<{owner:string;item:string;request:RentalRequest|null}>(); const [recoveryError,setRecoveryError]=useState<unknown>();
  const form=useForm({resolver:zodResolver(rentalPeriodInput),values:{startsAt:draft?.startsAt??'',endsAt:draft?.endsAt??''}});
  const item=useQuery({queryKey:['item',id],queryFn:()=>api.item(id)});
+ const period=useWatch({control:form.control});
+ const estimate=item.data?rentalEstimate(period.startsAt??'',period.endsAt??'',item.data.daily_price,item.data.deposit):null;
+
  const recoveryReady=!!session&&recovery?.owner===session.user.id&&recovery.item===id;
  const saved=recoveryReady?recovery.request:null;
  useEffect(()=>{
@@ -44,6 +47,7 @@ export default function Reserve({params}:{params:Promise<{id:string}>}) {
  {saved?<p>이전 요청의 결과를 확인해 주세요. 확인 전에는 대여 기간을 변경할 수 없습니다.{'\n'}{formatKoreaTime(saved.p_starts_at)} → {formatKoreaTime(saved.p_ends_at)}</p>:null}
  <form onSubmit={e=>{e.preventDefault();if(saved)request.mutate({startsAt:'',endsAt:''});else void form.handleSubmit(v=>request.mutate(v))(e);}}><FieldGroup>
  {!saved?(['startsAt','endsAt'] as const).map(name=><Controller key={name} name={name} control={form.control} render={({field})=><Field data-invalid={!!form.formState.errors[name]}><FieldLabel htmlFor={name}>{name==='startsAt'?'시작 일시':'반납 일시'}</FieldLabel><Input {...field} id={name} type="datetime-local" disabled={request.isPending||!!saved||!recoveryReady} aria-invalid={!!form.formState.errors[name]} onInput={event=>{const value=event.currentTarget.value;field.onChange(value);useRentalDrafts.getState().setDraft(id,{...form.getValues(),[name]:value});}} onChange={event=>{const value=event.target.value;field.onChange(value);useRentalDrafts.getState().setDraft(id,{...form.getValues(),[name]:value});}}/><FieldError errors={[form.formState.errors[name]]}/></Field>}/>):null}
+ {estimate&&!saved?<section aria-label="예상 결제 금액" aria-live="polite" className="flex flex-col gap-2"><h2 className="font-semibold">예상 결제 금액</h2><p>대여료 ({estimate.days}일) {formatWon(estimate.fee)}</p><p>보증금 {formatWon(estimate.deposit)}</p><p className="text-xl font-semibold">총 결제액 {formatWon(estimate.total)}</p><p className="text-sm text-muted-foreground">보증금은 반납 확인 후 반환됩니다. 최종 금액은 예약 요청 시 확정됩니다.</p></section>:null}
  <p className="text-muted-foreground">대여자가 수락하면 결제할 수 있습니다. 요청만으로 물품이 확보되지는 않습니다.</p>
  <Button disabled={request.isPending||!recoveryReady||(!saved&&!item.data)}>{saved?'예약 결과 다시 확인':'예약 요청'}</Button></FieldGroup></form><Failure error={recoveryError??item.error??request.error}/></section>;
 }

@@ -38,10 +38,13 @@ export function createHandler(providers:ProviderFactory=paymentProvider) {
    const {data:c,error}=await admin.from('toss_checkouts').select('*').eq('order_id',body.orderId).single();
    if(error)throw error;
    if(body.action==='checkout') {
-    const {data:r,error}=await admin.from('reservations').select('status').eq('id',c.reservation_id).single();if(error)throw error;
-    return jsonResponse(200,{orderId:c.order_id,amount:c.amount,customerKey:c.customer_key,mobile:session.mobile,reservationId:c.reservation_id,status:r.status,canPay:r.status==='accepted'&&Date.parse(c.expires_at)>Date.now()});
+    const {data:r,error}=await admin.from('reservations').select('status,payment_attempt_merchant_uid').eq('id',c.reservation_id).single();if(error)throw error;
+    return jsonResponse(200,{orderId:c.order_id,amount:c.amount,customerKey:c.customer_key,mobile:session.mobile,reservationId:c.reservation_id,status:r.status,recovering:r.status==='accepted'&&!!r.payment_attempt_merchant_uid,canPay:r.status==='accepted'&&!r.payment_attempt_merchant_uid&&Date.parse(c.expires_at)>Date.now()});
    }
-   if(body.action==='status')return jsonResponse(200,{...await reconcileCheckout(admin,c.order_id,undefined,providers),mobile:session.mobile});
+   if(body.action==='status') {
+    const {data:r,error}=await admin.from('reservations').select('status').eq('id',c.reservation_id).single();if(error)throw error;
+    return jsonResponse(200,{...(r.status==='accepted'?await reconcileCheckout(admin,c.order_id,undefined,providers):{status:r.status,reservationId:c.reservation_id}),mobile:session.mobile});
+   }
    if(typeof body.paymentKey!=='string'||!body.paymentKey||body.amount!==c.amount)return jsonResponse(400,{error:'결제 금액 또는 승인 정보가 일치하지 않습니다.'});
    const result=await reconcileCheckout(admin,c.order_id,body.paymentKey,providers);
    return jsonResponse(200,{...result,mobile:session.mobile});
