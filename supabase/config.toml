@@ -75,3 +75,6 @@ verify_jwt = false # Handler validates the caller before commands.
 
 [functions.rental-recovery]
 verify_jwt = false # Exact service-role bearer required; never a user JWT.
+
+[functions.gemini-analyze]
+verify_jwt = false # Handler verifies the JWT before reserving account quota.

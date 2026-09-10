@@ -34,6 +34,59 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_usage_counters: {
+        Row: {
+          day_count: number
+          day_start: string
+          feature: string
+          minute_count: number
+          minute_start: string
+          user_id: string
+        }
+        Insert: {
+          day_count?: number
+          day_start: string
+          feature: string
+          minute_count?: number
+          minute_start: string
+          user_id: string
+        }
+        Update: {
+          day_count?: number
+          day_start?: string
+          feature?: string
+          minute_count?: number
+          minute_start?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_usage_counters_feature_fkey"
+            columns: ["feature"]
+            isOneToOne: false
+            referencedRelation: "api_usage_limits"
+            referencedColumns: ["feature"]
+          },
+        ]
+      }
+      api_usage_limits: {
+        Row: {
+          feature: string
+          per_day: number
+          per_minute: number
+        }
+        Insert: {
+          feature: string
+          per_day: number
+          per_minute: number
+        }
+        Update: {
+          feature?: string
+          per_day?: number
+          per_minute?: number
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           created_at: string | null
@@ -432,48 +485,66 @@ export type Database = {
         Row: {
           actor_id: string
           amount: number
+          attempt_count: number
           created_at: string
           dispatched_at: string | null
+          failure_count: number
           id: string
           kind: string
           last_checked_at: string | null
+          last_error_at: string | null
+          last_error_code: string | null
           lease_token: string | null
           lease_until: string | null
+          next_attempt_at: string
           payment_id: string
           provider: string
           reservation_id: string
+          review_required_at: string | null
           status: string
           total: number
         }
         Insert: {
           actor_id: string
           amount: number
+          attempt_count?: number
           created_at?: string
           dispatched_at?: string | null
+          failure_count?: number
           id?: string
           kind: string
           last_checked_at?: string | null
+          last_error_at?: string | null
+          last_error_code?: string | null
           lease_token?: string | null
           lease_until?: string | null
+          next_attempt_at?: string
           payment_id: string
           provider: string
           reservation_id: string
+          review_required_at?: string | null
           status?: string
           total: number
         }
         Update: {
           actor_id?: string
           amount?: number
+          attempt_count?: number
           created_at?: string
           dispatched_at?: string | null
+          failure_count?: number
           id?: string
           kind?: string
           last_checked_at?: string | null
+          last_error_at?: string | null
+          last_error_code?: string | null
           lease_token?: string | null
           lease_until?: string | null
+          next_attempt_at?: string
           payment_id?: string
           provider?: string
           reservation_id?: string
+          review_required_at?: string | null
           status?: string
           total?: number
         }
@@ -500,6 +571,21 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      rental_recovery_dispatches: {
+        Row: {
+          created_at: string
+          request_id: number
+        }
+        Insert: {
+          created_at?: string
+          request_id: number
+        }
+        Update: {
+          created_at?: string
+          request_id?: number
+        }
+        Relationships: []
       }
       reports: {
         Row: {
@@ -865,41 +951,59 @@ export type Database = {
       toss_checkouts: {
         Row: {
           amount: number
+          attempt_count: number
           customer_key: string
           expires_at: string
+          failure_count: number
           last_checked_at: string | null
+          last_error_at: string | null
+          last_error_code: string | null
           lease_token: string | null
           lease_until: string | null
           mobile: boolean
+          next_attempt_at: string
           order_id: string
           payment_key: string | null
           reservation_id: string
+          review_required_at: string | null
           token_hash: string
         }
         Insert: {
           amount: number
+          attempt_count?: number
           customer_key: string
           expires_at: string
+          failure_count?: number
           last_checked_at?: string | null
+          last_error_at?: string | null
+          last_error_code?: string | null
           lease_token?: string | null
           lease_until?: string | null
           mobile?: boolean
+          next_attempt_at?: string
           order_id: string
           payment_key?: string | null
           reservation_id: string
+          review_required_at?: string | null
           token_hash: string
         }
         Update: {
           amount?: number
+          attempt_count?: number
           customer_key?: string
           expires_at?: string
+          failure_count?: number
           last_checked_at?: string | null
+          last_error_at?: string | null
+          last_error_code?: string | null
           lease_token?: string | null
           lease_until?: string | null
           mobile?: boolean
+          next_attempt_at?: string
           order_id?: string
           payment_key?: string | null
           reservation_id?: string
+          review_required_at?: string | null
           token_hash?: string
         }
         Relationships: [
@@ -1051,6 +1155,36 @@ export type Database = {
         }
         Relationships: []
       }
+      rental_recovery_due: {
+        Row: {
+          attempt_count: number | null
+          created_at: string | null
+          failure_count: number | null
+          key: string | null
+          kind: string | null
+          last_error_at: string | null
+          last_error_code: string | null
+          next_attempt_at: string | null
+          reservation_id: string | null
+          review_required_at: string | null
+        }
+        Relationships: []
+      }
+      rental_recovery_queue: {
+        Row: {
+          attempt_count: number | null
+          created_at: string | null
+          failure_count: number | null
+          key: string | null
+          kind: string | null
+          last_error_at: string | null
+          last_error_code: string | null
+          next_attempt_at: string | null
+          reservation_id: string | null
+          review_required_at: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       begin_rental_money_operation: {
@@ -1058,16 +1192,22 @@ export type Database = {
         Returns: {
           actor_id: string
           amount: number
+          attempt_count: number
           created_at: string
           dispatched_at: string | null
+          failure_count: number
           id: string
           kind: string
           last_checked_at: string | null
+          last_error_at: string | null
+          last_error_code: string | null
           lease_token: string | null
           lease_until: string | null
+          next_attempt_at: string
           payment_id: string
           provider: string
           reservation_id: string
+          review_required_at: string | null
           status: string
           total: number
         }
@@ -1096,16 +1236,22 @@ export type Database = {
         Returns: {
           actor_id: string
           amount: number
+          attempt_count: number
           created_at: string
           dispatched_at: string | null
+          failure_count: number
           id: string
           kind: string
           last_checked_at: string | null
+          last_error_at: string | null
+          last_error_code: string | null
           lease_token: string | null
           lease_until: string | null
+          next_attempt_at: string
           payment_id: string
           provider: string
           reservation_id: string
+          review_required_at: string | null
           status: string
           total: number
         }
@@ -1126,6 +1272,10 @@ export type Database = {
       }
       confirm_reservation_return: {
         Args: { p_reservation_id: string; p_return_photo: string }
+        Returns: Json
+      }
+      consume_api_quota: {
+        Args: { p_feature: string; p_user_id: string }
         Returns: Json
       }
       create_reservation_intent: {
@@ -1256,15 +1406,21 @@ export type Database = {
         }
         Returns: {
           amount: number
+          attempt_count: number
           customer_key: string
           expires_at: string
+          failure_count: number
           last_checked_at: string | null
+          last_error_at: string | null
+          last_error_code: string | null
           lease_token: string | null
           lease_until: string | null
           mobile: boolean
+          next_attempt_at: string
           order_id: string
           payment_key: string | null
           reservation_id: string
+          review_required_at: string | null
           token_hash: string
         }
         SetofOptions: {
@@ -1274,6 +1430,17 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      record_rental_recovery_attempt: {
+        Args: {
+          p_code: string
+          p_failed?: boolean
+          p_key: string
+          p_kind: string
+          p_lease: string
+          p_review?: boolean
+        }
+        Returns: undefined
+      }
       release_rental_money_operation: {
         Args: { p_id: string; p_lease: string }
         Returns: undefined
@@ -1282,6 +1449,7 @@ export type Database = {
         Args: { p_lease: string; p_order_id: string }
         Returns: undefined
       }
+      rental_recovery_health: { Args: never; Returns: Json }
       request_rental: {
         Args: {
           p_ends_at: string
@@ -1367,6 +1535,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      retry_rental_recovery: {
+        Args: { p_key: string; p_kind: string }
+        Returns: boolean
       }
       return_rental: {
         Args: { p_photo_path: string; p_reservation_id: string }

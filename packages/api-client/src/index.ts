@@ -1,3 +1,5 @@
+import {ApiRequestError} from './errors.ts';
+export {ApiRequestError} from './errors.ts';
 import {RentalRequestRejected} from './pending-rentals.ts';
 export {createPendingRentals, RentalRequestRejected, type RentalRequest} from './pending-rentals.ts';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -20,15 +22,19 @@ export function createApi(client: Client) {
     if(error) {
       const context=(error as {context?:Response}).context;
       const detail=context?await context.json().catch(()=>null):null;
-      throw new Error(detail?.error??'처리 결과를 확인하지 못했습니다. 다시 확인해 주세요.');
+      throw new ApiRequestError(detail??{});
     }
-    if(data?.error)throw new Error(data.error);
+    if(data?.error)throw new ApiRequestError(data);
     return data;
   }
   return {
     async preparePayment(reservationId: string, mobile = false): Promise<{checkoutUrl: string}> {
       const {data,error} = await client.functions.invoke('toss-payment', {body: {action:'prepare',reservationId,mobile}});
-      if(error || data?.error) throw new Error(data?.error ?? '결제창을 준비하지 못했습니다. 설정과 예약 상태를 확인해 주세요.');
+      if(error || data?.error) {
+        const context=(error as {context?:Response}|null)?.context;
+        const detail=data?.error?data:context?await context.json().catch(()=>null):null;
+        throw new ApiRequestError(detail??{error:'결제창을 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.'});
+      }
       return data;
     },
     async rentals({cursor,activeOnly=false}: {cursor?:RentalCursor;activeOnly?:boolean} = {}) {

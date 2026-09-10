@@ -66,6 +66,18 @@ jobs:
           npx playwright install --with-deps --no-shell chromium
           npm run build:qa
           npm run qa:web
+      - name: Exercise the actual scheduled recovery delivery
+        run: |
+          supabase functions serve > /tmp/dolpin-edge.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            status=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:55321/functions/v1/rental-recovery || true)
+            if [ "$status" = "401" ]; then break; fi
+            sleep 2
+          done
+          node scripts/check-local-recovery-schedule.mjs
+          npm run ops:recovery -- --check
+      - name: Verify selective catalog search plan
+        run: docker exec -i supabase_db_dol-pin psql -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/qa/catalog-plan.sql
       - name: Upload failed browser evidence
         if: failure()
         uses: actions/upload-artifact@v4

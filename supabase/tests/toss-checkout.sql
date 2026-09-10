@@ -16,7 +16,7 @@ DO $$ DECLARE c public.toss_checkouts; r uuid := current_setting('test.rental_id
  BEGIN
   PERFORM public.prepare_toss_checkout(r,'11000000-0000-4000-8000-000000000001','hash',false);
   RAISE EXCEPTION 'lender was allowed to pay';
- EXCEPTION WHEN raise_exception THEN IF SQLERRM='lender was allowed to pay' THEN RAISE; END IF; END;
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  c:=public.prepare_toss_checkout(r,'11000000-0000-4000-8000-000000000002','hash',false);
  IF c.amount<>(SELECT total_paid FROM public.reservations WHERE id=r) THEN RAISE EXCEPTION 'amount not server owned'; END IF;
  PERFORM public.begin_toss_confirmation(c.order_id);

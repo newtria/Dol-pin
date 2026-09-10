@@ -22,7 +22,8 @@
     "qa:ios": "node scripts/ios-preview.mjs qa",
     "test:mobile-errors": "node --experimental-strip-types --test scripts/test-mobile-errors.mjs",
     "test:email-auth": "node --experimental-strip-types --test scripts/test-email-auth-input.mjs",
-    "test:email-auth:local": "node scripts/check-local-email-auth.mjs"
+    "test:email-auth:local": "node scripts/check-local-email-auth.mjs",
+    "ops:recovery": "node scripts/recovery-ops.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
