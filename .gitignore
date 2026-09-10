@@ -28,3 +28,6 @@ dolda_기획서.md
 
 .next-*/
 .next-qa
+
+# Expo-generated native preview project; the Flutter ios/ project stays tracked.
+/apps/mobile/ios/

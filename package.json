@@ -16,7 +16,10 @@
     "qa:web": "playwright test",
     "qa:gateway": "node scripts/start-qa-gateway.mjs",
     "check:migrations": "node scripts/check-migrations.mjs",
-    "build:qa": "node scripts/build-qa.mjs"
+    "build:qa": "node scripts/build-qa.mjs",
+    "ios:build": "node scripts/ios-preview.mjs build",
+    "ios:open": "node scripts/ios-preview.mjs open",
+    "qa:ios": "node scripts/ios-preview.mjs qa"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

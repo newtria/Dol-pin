@@ -36,6 +36,9 @@ Next.js production 브라우저에서 수행했습니다. 화면의 상품·계�
 - [RN에서 수락한 거래의 웹 화면](docs/verification/web-rn-rental.png)
 - [웹 예약 초안 복원](docs/verification/web-rental-draft.png)
 
+iOS 로컬 실행은 Expo Go 대신 전용 앱을 사용합니다. 빌드·실행·반복 시작 QA는
+[iOS 실행 안내](docs/ios-runtime.md)를 따릅니다.
+
 ## Design intent
 
 ```text
