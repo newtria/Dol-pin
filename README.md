@@ -18,10 +18,11 @@ Flutter 클라이언트를 React Native + Expo로 전환하고, Next.js 소비�
 | 서버 권한 | RPC 역할 검사, 직접 거래 UPDATE 차단, RLS, 상품 허용 필드·Storage 경로 제한 |
 | 일관성 | 서버 요금 계산, 당일 대여, 동시 수락 충돌 제약, 수락 조건 snapshot, 명령 재시도·이력 |
 | 만료 | 매분 미결제 예약 만료. 결제 결과 불명 작업은 해제하지 않고 보존 |
-| 상태 관리 | 서버 데이터는 TanStack Query, 검색·예약 초안은 Zustand, 폼은 RHF + Zod |
+| 상태 관리 | 서버 데이터는 TanStack Query, 웹 검색은 URL, 모바일 탐색·예약 초안은 Zustand, 폼은 RHF + Zod |
 
 **전체 거래 서비스는 아직 출시 가능한 상태가 아닙니다.** 새 클라이언트의
-결제·인수·반납·환불과 운영 복구는 아래 Planned 범위입니다.
+토스 결제·인수·비공개 반납 증빙·환불·복구 명령은 구현했고, 실제 로컬 DB와
+결제사 모의 응답을 사용한 자동 QA로 검증합니다. 실제 PG 승인·환불과 배포 환경 복구는 미검증입니다.
 기존 Flutter/PortOne 구현은 보존되어 있으나, 존재하는 코드와 새 구조에서
 검증한 기능을 동일하게 취급하지 않습니다. 기존 운영자 분쟁 해결 Edge Function도
 보존하지만 새 `/ops` 권한·복구 경로에는 아직 연결하지 않았습니다.
@@ -47,7 +48,7 @@ Next.js consumer ────┘                       │
                                       Edge Functions
                                       결제·웹훅·복구
                                              │
-                                          PortOne
+                                      Toss / PortOne
 ```
 
 클라이언트는 거래 상태를 직접 쓰지 않습니다. DB 내부의 원자 변경은 RPC,
@@ -63,13 +64,13 @@ PortOne V1/V2는 [비교 ADR](docs/adr/004-portone-version-investigation.md)에
 - [상태 전이와 구현된 예약 계약](docs/rental-state-machine.md)
 - [전체 실행 계획](docs/rewrite-plan.md)
 
+자동 거래 QA 실행 방법과 복구 배포 조건: [QA 안내](docs/qa.md).
+
 ## Planned
 
-- 기존 Google·Apple OAuth 이식과 OAuth 사용자 프로필 경로
-- 준비된 토스페이먼츠 설정 확인 후 직접 연동/PortOne 경유 방식 확정
-- 새 클라이언트의 결제와 앱 복귀, 검증된 웹훅 처리
-- 금융 작업별 식별자·재시도·PG/DB 불일치 복구
-- 반납 신고와 수령 확인 분리, 비공개 증빙, 보증금 환불
+- 실제 PG 테스트 채널의 승인·취소 및 네이티브 결제 앱 복귀 검증
+- 배포 환경의 Vault·복구 스케줄 구성과 운영 모니터링
+- 결제사 외부에서 발생한 수동 취소·분쟁의 운영 대응
 - `/ops` 거래 조사·분쟁·reconciliation
 - 교차 클라이언트 거래 E2E와 재현 가능한 시연
 

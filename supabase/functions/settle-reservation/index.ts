@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
     const { data: reservation, error: resError } = await adminClient
       .from("reservations")
       .select(
-        "id, borrower_id, lender_id, deposit, total_paid, currency, status, payment_id, payment_action, payment_action_started_at",
+        "id, borrower_id, lender_id, deposit, total_paid, currency, status, payment_id, payment_action, payment_action_started_at, payment_provider",
       )
       .eq("id", reservationId)
       .maybeSingle();
@@ -90,6 +90,10 @@ Deno.serve(async (req) => {
     if (resError || !reservation) {
       return jsonResponse(404, { error: "Reservation not found" });
     }
+
+  if (reservation.payment_provider !== "portone") {
+    return jsonResponse(409, {error: "Use the provider-aware rental-payment command"});
+  }
 
     // Only the lender can settle. The borrower's authority ends at
     // `returned`; if the borrower wants money back they go through
@@ -148,16 +152,9 @@ Deno.serve(async (req) => {
 
         const refundedAmount = payment.cancel_amount ?? 0;
         if (refundedAmount < reservation.deposit) {
-          if (actionIsStale) {
-            await clearReservationPaymentAction(adminClient, {
-              reservationId: reservation.id,
-              action: "settle_pending",
-            });
-          } else {
-            return jsonResponse(409, {
-              error: "Settlement already in progress",
-            });
-          }
+          return jsonResponse(409, {
+            error: "Settlement outcome is unknown; provider reconciliation is required",
+          });
         } else {
           const { data: retryTxResult, error: retryTxError } =
             await transitionReservationStatus(adminClient, {

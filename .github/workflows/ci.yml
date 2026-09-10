@@ -25,6 +25,10 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 2.107.0
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: npm run check:migrations
       - name: Start isolated local Supabase
         run: supabase start -x vector,analytics
       - name: Rebuild schema from zero
@@ -42,12 +46,30 @@ jobs:
         run: |
           npm run typecheck
           npm run typecheck -w @dolpin/web
+      - name: Exercise payment failures and durable recovery
+        run: |
+          npm run test:edge
+          npm run test:recovery
+          npm run test:recovery:local
+          npm run test:finance
       - name: Build consumer web
         run: npm run build -w @dolpin/web
         env:
           NEXT_TELEMETRY_DISABLED: '1'
       - name: Validate Expo iOS bundle
         run: npm run export -w @dolpin/mobile
+      - name: Browser transaction QA (local provider fixture)
+        run: |
+          npx playwright install --with-deps --no-shell chromium
+          npm run build:qa
+          npm run qa:web
+      - name: Upload failed browser evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-qa
+          path: /tmp/dolpin-qa-results
+          retention-days: 7
       - name: Stop local services
         if: always()
         run: supabase stop

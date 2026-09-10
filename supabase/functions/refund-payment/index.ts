@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
   const { data: reservation, error: resError } = await adminClient
     .from("reservations")
     .select(
-      "id, borrower_id, lender_id, total_paid, currency, status, payment_id, payment_action, payment_action_started_at",
+      "id, borrower_id, lender_id, total_paid, currency, status, payment_id, payment_action, payment_action_started_at, payment_provider",
     )
     .eq("id", reservationId)
     .maybeSingle();
@@ -108,6 +108,10 @@ Deno.serve(async (req) => {
   if (resError || !reservation) {
     return jsonResponse(404, { error: "Reservation not found" });
   }
+  if (reservation.payment_provider !== "portone") {
+    return jsonResponse(409, {error: "Use the provider-aware rental-payment command"});
+  }
+
   const isParticipant = reservation.borrower_id === callerId ||
     reservation.lender_id === callerId;
   if (!isParticipant) {

@@ -16,7 +16,7 @@ export default function ItemDetail() {
       {item.data.photos[0] ? <Image source={{uri: item.data.photos[0]}} style={{width: '100%', aspectRatio: 1.2, borderRadius: 12}} accessibilityLabel={item.data.title}/> : null}
       <Text style={s.title}>{item.data.title}</Text><Text style={s.price}>{formatWon(item.data.daily_price)} / 일</Text>
       {item.data.lender_id===session?.user.id?<Text style={s.muted}>내가 등록한 물품입니다.</Text>:<Button label="대여 기간 선택" onPress={()=>router.push(`/rentals/new?itemId=${id}`)}/>}
-      <Text style={s.muted}>보증금 {formatWon(item.data.deposit)}</Text><Text style={s.body}>{item.data.description}</Text>
+      <Text style={s.muted}>보증금 {formatWon(item.data.deposit)}</Text><Text style={s.body}>{item.data.description}</Text><Text style={s.body}>인수·반납 장소: {item.data.pickup_note??'등록된 장소 정보가 없습니다.'}</Text>
     </> : null}
   </ScrollView>;
 }

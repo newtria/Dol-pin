@@ -17,7 +17,7 @@ export default function NewItem() {
   const [uploading, setUploading] = useState(false);
   const form = useForm<ItemInput>({resolver: zodResolver(itemInput), defaultValues: {
     title: '', description: '', category: 'lightstick', concert_id: null,
-    daily_price: 5000, deposit: 30000, photos: [], pickup_method: 'direct',
+    daily_price: 5000, deposit: 30000, photos: [], pickup_method: 'direct', pickup_note: '',
   }});
   const photos = form.watch('photos');
   const category = form.watch('category');
@@ -53,8 +53,10 @@ export default function NewItem() {
     <Controller control={form.control} name="title" render={({field}) => <Field label="상품명" value={field.value} onChangeText={field.onChange}/>}/>
     <ErrorText error={form.formState.errors.title?.message}/>
     <Text style={s.muted}>품목</Text><ScrollView horizontal contentContainerStyle={{gap: 8}}>{categories.map(c => <Button key={c} label={categoryLabels[c]} secondary={category !== c} onPress={() => form.setValue('category', c)}/>)}</ScrollView>
-    <Controller control={form.control} name="description" render={({field}) => <Field label="상품 설명 · 인수 장소" multiline value={field.value} onChangeText={field.onChange}/>}/>
+    <Controller control={form.control} name="description" render={({field}) => <Field label="상품 설명" multiline value={field.value} onChangeText={field.onChange}/>}/>
     <ErrorText error={form.formState.errors.description?.message}/>
+    <Controller control={form.control} name="pickup_note" render={({field}) => <Field label="인수·반납 장소" value={field.value} onChangeText={field.onChange}/>}/>
+    <ErrorText error={form.formState.errors.pickup_note?.message}/>
     {(['daily_price', 'deposit'] as const).map(name => <View key={name} style={{gap: 8}}><Controller control={form.control} name={name} render={({field}) => <Field label={name === 'daily_price' ? '하루 대여료 (원)' : '보증금 (원)'} keyboardType="number-pad" value={String(field.value)} onChangeText={v => field.onChange(v === '' ? 0 : Number(v))}/>}/><ErrorText error={form.formState.errors[name]?.message}/></View>)}
     <Text style={s.muted}>직접 인수·반납하는 물품입니다.</Text>
     <Button label={create.isPending ? '등록 중' : '물품 등록'} disabled={create.isPending || uploading} onPress={form.handleSubmit(value => create.mutate(value))}/>

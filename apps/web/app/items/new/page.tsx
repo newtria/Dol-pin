@@ -15,7 +15,7 @@ import {Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectIt
 export default function NewItem() {
   const {client, api, session, ready} = useApi(); const router = useRouter(); const queries = useQueryClient();
   const [uploading, setUploading] = useState(false); const [uploadError, setUploadError] = useState<unknown>();
-  const form = useForm<ItemInput>({resolver: zodResolver(itemInput), defaultValues: {title: '', description: '', category: 'lightstick', concert_id: null, daily_price: 5000, deposit: 30000, photos: [], pickup_method: 'direct'}});
+  const form = useForm<ItemInput>({resolver: zodResolver(itemInput), defaultValues: {title: '', description: '', category: 'lightstick', concert_id: null, daily_price: 5000, deposit: 30000, photos: [], pickup_method: 'direct', pickup_note: ''}});
   const photos = form.watch('photos');
   const create = useMutation({mutationFn: api.createItem, onSuccess: async item => {await queries.invalidateQueries({queryKey: ['items']}); router.replace(`/items/${item.id}`);}});
   async function upload(file?: File) {
@@ -36,7 +36,8 @@ export default function NewItem() {
     <div className="flex gap-4">{photos.map(src => <img key={src} src={src} alt="등록할 상품 사진" className="size-24 rounded-lg object-cover"/>)}</div><Failure error={uploadError}/>
     <Field data-invalid={!!form.formState.errors.title}><FieldLabel htmlFor="title">상품명</FieldLabel><Input id="title" aria-invalid={!!form.formState.errors.title} {...form.register('title')}/><FieldError errors={[form.formState.errors.title]}/></Field>
     <Field><FieldLabel htmlFor="category">품목</FieldLabel><Select value={form.watch('category')} onValueChange={v => form.setValue('category', v as ItemInput['category'])}><SelectTrigger id="category"><SelectValue/></SelectTrigger><SelectContent><SelectGroup>{categories.map(c => <SelectItem key={c} value={c}>{categoryLabels[c]}</SelectItem>)}</SelectGroup></SelectContent></Select></Field>
-    <Field data-invalid={!!form.formState.errors.description}><FieldLabel htmlFor="description">상품 설명 · 인수 장소</FieldLabel><Input id="description" aria-invalid={!!form.formState.errors.description} {...form.register('description')}/><FieldError errors={[form.formState.errors.description]}/></Field>
+    <Field data-invalid={!!form.formState.errors.description}><FieldLabel htmlFor="description">상품 설명</FieldLabel><Input id="description" aria-invalid={!!form.formState.errors.description} {...form.register('description')}/><FieldError errors={[form.formState.errors.description]}/></Field>
+    <Field data-invalid={!!form.formState.errors.pickup_note}><FieldLabel htmlFor="pickup_note">인수·반납 장소</FieldLabel><Input id="pickup_note" {...form.register('pickup_note')}/><FieldError errors={[form.formState.errors.pickup_note]}/></Field>
     {(['daily_price','deposit'] as const).map(name => <Field key={name} data-invalid={!!form.formState.errors[name]}><FieldLabel htmlFor={name}>{name === 'daily_price' ? '하루 대여료 (원)' : '보증금 (원)'}</FieldLabel><Input id={name} type="number" aria-invalid={!!form.formState.errors[name]} {...form.register(name, {valueAsNumber: true})}/><FieldError errors={[form.formState.errors[name]]}/></Field>)}
     <p className="text-muted-foreground">직접 인수·반납하는 물품입니다.</p><Button disabled={uploading || create.isPending}>{uploading ? '사진 업로드 중' : create.isPending ? '등록 중' : '물품 등록'}</Button><Failure error={create.error}/>
   </FieldGroup></form></section>;

@@ -1,5 +1,5 @@
 -- Checkout capabilities contain no login token and authorize only one reservation.
-CREATE TABLE public.toss_checkouts (
+CREATE TABLE IF NOT EXISTS public.toss_checkouts (
  reservation_id uuid PRIMARY KEY REFERENCES public.reservations(id),
  order_id text NOT NULL UNIQUE,
  token_hash text NOT NULL,
@@ -12,7 +12,7 @@ ALTER TABLE public.toss_checkouts ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.toss_checkouts FROM anon, authenticated;
 GRANT ALL ON public.toss_checkouts TO service_role;
 
-CREATE FUNCTION public.prepare_toss_checkout(p_reservation_id uuid, p_actor uuid, p_token_hash text, p_mobile boolean)
+CREATE OR REPLACE FUNCTION public.prepare_toss_checkout(p_reservation_id uuid, p_actor uuid, p_token_hash text, p_mobile boolean)
 RETURNS public.toss_checkouts LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE r public.reservations; checkout public.toss_checkouts;
 BEGIN
@@ -28,7 +28,7 @@ END $$;
 
 -- Reserve the attempt before contacting Toss. Expiry jobs must not discard an
 -- approval whose network outcome is unknown. Retrying reconciles the same order.
-CREATE FUNCTION public.begin_toss_confirmation(p_order_id text)
+CREATE OR REPLACE FUNCTION public.begin_toss_confirmation(p_order_id text)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE c public.toss_checkouts; r public.reservations;
 BEGIN
@@ -42,7 +42,7 @@ BEGIN
  payment_attempt_started_at=coalesce(payment_attempt_started_at,clock_timestamp()) WHERE id=r.id;
 END $$;
 
-CREATE FUNCTION public.finish_toss_confirmation(p_order_id text, p_payment_key text)
+CREATE OR REPLACE FUNCTION public.finish_toss_confirmation(p_order_id text, p_payment_key text)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE c public.toss_checkouts; r public.reservations;
 BEGIN

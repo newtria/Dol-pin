@@ -348,6 +348,7 @@ export type Database = {
           photos: string[]
           pickup_location: Json | null
           pickup_method: string
+          pickup_note: string | null
           status: string | null
           title: string
           updated_at: string | null
@@ -372,6 +373,7 @@ export type Database = {
           photos: string[]
           pickup_location?: Json | null
           pickup_method: string
+          pickup_note?: string | null
           status?: string | null
           title: string
           updated_at?: string | null
@@ -396,6 +398,7 @@ export type Database = {
           photos?: string[]
           pickup_location?: Json | null
           pickup_method?: string
+          pickup_note?: string | null
           status?: string | null
           title?: string
           updated_at?: string | null
@@ -421,6 +424,79 @@ export type Database = {
             columns: ["lender_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rental_money_operations: {
+        Row: {
+          actor_id: string
+          amount: number
+          created_at: string
+          dispatched_at: string | null
+          id: string
+          kind: string
+          last_checked_at: string | null
+          lease_token: string | null
+          lease_until: string | null
+          payment_id: string
+          provider: string
+          reservation_id: string
+          status: string
+          total: number
+        }
+        Insert: {
+          actor_id: string
+          amount: number
+          created_at?: string
+          dispatched_at?: string | null
+          id?: string
+          kind: string
+          last_checked_at?: string | null
+          lease_token?: string | null
+          lease_until?: string | null
+          payment_id: string
+          provider: string
+          reservation_id: string
+          status?: string
+          total: number
+        }
+        Update: {
+          actor_id?: string
+          amount?: number
+          created_at?: string
+          dispatched_at?: string | null
+          id?: string
+          kind?: string
+          last_checked_at?: string | null
+          lease_token?: string | null
+          lease_until?: string | null
+          payment_id?: string
+          provider?: string
+          reservation_id?: string
+          status?: string
+          total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rental_money_operations_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "public_user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_money_operations_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_money_operations_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: false
+            referencedRelation: "reservations"
             referencedColumns: ["id"]
           },
         ]
@@ -757,6 +833,85 @@ export type Database = {
           },
         ]
       }
+      toss_checkout_sessions: {
+        Row: {
+          expires_at: string
+          mobile: boolean
+          order_id: string
+          token_hash: string
+        }
+        Insert: {
+          expires_at?: string
+          mobile: boolean
+          order_id: string
+          token_hash: string
+        }
+        Update: {
+          expires_at?: string
+          mobile?: boolean
+          order_id?: string
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "toss_checkout_sessions_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "toss_checkouts"
+            referencedColumns: ["order_id"]
+          },
+        ]
+      }
+      toss_checkouts: {
+        Row: {
+          amount: number
+          customer_key: string
+          expires_at: string
+          last_checked_at: string | null
+          lease_token: string | null
+          lease_until: string | null
+          mobile: boolean
+          order_id: string
+          payment_key: string | null
+          reservation_id: string
+          token_hash: string
+        }
+        Insert: {
+          amount: number
+          customer_key: string
+          expires_at: string
+          last_checked_at?: string | null
+          lease_token?: string | null
+          lease_until?: string | null
+          mobile?: boolean
+          order_id: string
+          payment_key?: string | null
+          reservation_id: string
+          token_hash: string
+        }
+        Update: {
+          amount?: number
+          customer_key?: string
+          expires_at?: string
+          last_checked_at?: string | null
+          lease_token?: string | null
+          lease_until?: string | null
+          mobile?: boolean
+          order_id?: string
+          payment_key?: string | null
+          reservation_id?: string
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "toss_checkouts_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: true
+            referencedRelation: "reservations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_blocks: {
         Row: {
           blocked_id: string
@@ -898,6 +1053,31 @@ export type Database = {
       }
     }
     Functions: {
+      begin_rental_money_operation: {
+        Args: { p_actor: string; p_kind: string; p_reservation_id: string }
+        Returns: {
+          actor_id: string
+          amount: number
+          created_at: string
+          dispatched_at: string | null
+          id: string
+          kind: string
+          last_checked_at: string | null
+          lease_token: string | null
+          lease_until: string | null
+          payment_id: string
+          provider: string
+          reservation_id: string
+          status: string
+          total: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "rental_money_operations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       begin_reservation_payment_action: {
         Args: {
           p_action: string
@@ -906,6 +1086,39 @@ export type Database = {
           p_reservation_id: string
         }
         Returns: Json
+      }
+      begin_toss_confirmation: {
+        Args: { p_order_id: string }
+        Returns: undefined
+      }
+      claim_rental_money_operation: {
+        Args: { p_id: string; p_lease: string }
+        Returns: {
+          actor_id: string
+          amount: number
+          created_at: string
+          dispatched_at: string | null
+          id: string
+          kind: string
+          last_checked_at: string | null
+          lease_token: string | null
+          lease_until: string | null
+          payment_id: string
+          provider: string
+          reservation_id: string
+          status: string
+          total: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "rental_money_operations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      claim_toss_confirmation: {
+        Args: { p_lease: string; p_order_id: string; p_payment_key?: string }
+        Returns: boolean
       }
       clear_reservation_payment_action: {
         Args: { p_action: string; p_reservation_id: string }
@@ -959,6 +1172,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      dispatch_rental_money_operation: {
+        Args: { p_id: string; p_lease: string }
+        Returns: boolean
+      }
       ensure_profile: {
         Args: { p_nickname: string }
         Returns: {
@@ -988,6 +1205,18 @@ export type Database = {
       }
       expire_stale_pending_reservations: { Args: never; Returns: number }
       expire_unpaid_rentals: { Args: never; Returns: number }
+      fail_toss_confirmation: {
+        Args: { p_order_id: string }
+        Returns: undefined
+      }
+      finish_rental_money_operation: {
+        Args: { p_id: string; p_lease: string }
+        Returns: undefined
+      }
+      finish_toss_confirmation: {
+        Args: { p_order_id: string; p_payment_key: string }
+        Returns: undefined
+      }
       get_chat_list: {
         Args: { p_user_id: string }
         Returns: {
@@ -1009,6 +1238,7 @@ export type Database = {
         }
         Returns: string
       }
+      invoke_rental_recovery: { Args: never; Returns: number }
       mark_reservation_paid: {
         Args: {
           p_payment_id: string
@@ -1016,6 +1246,41 @@ export type Database = {
           p_reservation_id: string
         }
         Returns: Json
+      }
+      prepare_toss_checkout: {
+        Args: {
+          p_actor: string
+          p_mobile: boolean
+          p_reservation_id: string
+          p_token_hash: string
+        }
+        Returns: {
+          amount: number
+          customer_key: string
+          expires_at: string
+          last_checked_at: string | null
+          lease_token: string | null
+          lease_until: string | null
+          mobile: boolean
+          order_id: string
+          payment_key: string | null
+          reservation_id: string
+          token_hash: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "toss_checkouts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      release_rental_money_operation: {
+        Args: { p_id: string; p_lease: string }
+        Returns: undefined
+      }
+      release_toss_confirmation: {
+        Args: { p_lease: string; p_order_id: string }
+        Returns: undefined
       }
       request_rental: {
         Args: {
@@ -1065,6 +1330,46 @@ export type Database = {
       }
       respond_to_rental: {
         Args: { p_action: string; p_reservation_id: string }
+        Returns: {
+          accepted_at: string | null
+          borrower_id: string
+          client_request_id: string | null
+          created_at: string | null
+          currency: string
+          deposit: number
+          ends_at: string | null
+          id: string
+          item_id: string
+          lender_id: string
+          payment_action: string | null
+          payment_action_started_at: string | null
+          payment_attempt_merchant_uid: string | null
+          payment_attempt_started_at: string | null
+          payment_due_at: string | null
+          payment_id: string | null
+          payment_provider: string | null
+          pickup_confirmed_at: string | null
+          quoted_item_version: string | null
+          rental_date: string
+          rental_fee: number
+          return_confirmed_at: string | null
+          return_date: string
+          return_photo: string | null
+          starts_at: string | null
+          status: Database["public"]["Enums"]["reservation_status"] | null
+          terms_snapshot: Json | null
+          total_paid: number
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "reservations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      return_rental: {
+        Args: { p_photo_path: string; p_reservation_id: string }
         Returns: {
           accepted_at: string | null
           borrower_id: string

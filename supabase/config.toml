@@ -65,3 +65,9 @@ secret = "env(APPLE_CLIENT_SECRET)"
 enabled = false # scripts/configure-oauth.mjs
 client_id = "env(KAKAO_CLIENT_ID)"
 secret = "env(KAKAO_CLIENT_SECRET)"
+
+[functions.rental-payment]
+verify_jwt = false # Handler validates the caller before commands.
+
+[functions.rental-recovery]
+verify_jwt = false # Exact service-role bearer required; never a user JWT.

@@ -25,3 +25,6 @@ dist/
 # Whitelist per-file if a docs PDF ever needs to ship.
 *.pdf
 dolda_기획서.md
+
+.next-*/
+.next-qa

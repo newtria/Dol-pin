@@ -1,18 +1,30 @@
 {
   "name": "dol-pin",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "mobile": "npm run start -w @dolpin/mobile",
     "typecheck": "tsc --noEmit",
     "test:db": "bash scripts/test-db.sh",
     "test:recovery": "node --experimental-strip-types --test scripts/test-rental-recovery.mjs",
-    "test:recovery:local": "node --experimental-strip-types scripts/check-local-rental-recovery.mjs"
+    "test:recovery:local": "node --experimental-strip-types scripts/check-local-rental-recovery.mjs",
+    "test:finance": "node scripts/run-finance-tests.mjs",
+    "test:edge": "deno test --allow-env --allow-net supabase/functions",
+    "qa:web": "playwright test",
+    "qa:gateway": "node scripts/start-qa-gateway.mjs",
+    "check:migrations": "node scripts/check-migrations.mjs",
+    "build:qa": "node scripts/build-qa.mjs"
   },
   "devDependencies": {
-    "typescript": "~6.0.3",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.0.0",
     "@types/react": "~19.2.2",
-    "@types/node": "^22.0.0"
+    "typescript": "~6.0.3"
   },
-  "engines": {"node": ">=22.22.0"}
+  "engines": {
+    "node": ">=22.22.0"
+  }
 }

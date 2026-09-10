@@ -14,6 +14,7 @@ export const itemInput = z.object({
   deposit: z.number().int().min(0).max(3000000),
   photos: z.array(z.url()).min(1, '사진을 추가해 주세요').max(5),
   pickup_method: z.literal('direct'),
+  pickup_note: z.string().trim().min(2, '인수·반납 장소를 입력해 주세요').max(300),
 });
 export type ItemInput = z.infer<typeof itemInput>;
 export const phoneInput = z.object({phone: z.string().regex(/^\+82\d{9,10}$/, '+82로 시작하는 전화번호를 입력해 주세요')});
@@ -40,4 +41,10 @@ export function rentalTitle(rental:{terms_snapshot:unknown;item:{title:string}|n
  const terms=rental.terms_snapshot;
  if(terms&&typeof terms==='object'&&'title' in terms&&typeof terms.title==='string')return terms.title;
  return rental.item?.title??'상품 정보 확인 필요';
+}
+
+export function rentalTerms(value:unknown):{description:string;pickupNote:string} {
+ if(!value||typeof value!=='object')return {description:'',pickupNote:''};
+ const v=value as Record<string,unknown>;
+ return {description:typeof v.description==='string'?v.description:'',pickupNote:typeof v.pickup_note==='string'?v.pickup_note:''};
 }
