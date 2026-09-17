@@ -11,8 +11,8 @@ const app=join(buildRoot,'Build/Products/Release-iphonesimulator/dolpin.app');
 const bundle='app.dolpin.preview';
 const mode=process.argv[2];
 const udid=process.argv[3];
-const run=(command,args,cwd=root)=>{
- const result=spawnSync(command,args,{cwd,stdio:'inherit',env:process.env});
+const run=(command,args,cwd=root,env=process.env)=>{
+ const result=spawnSync(command,args,{cwd,stdio:'inherit',env});
  if(result.error)throw result.error;
  if(result.status!==0)throw new Error(`${command} failed (${result.status})`);
 };
@@ -37,7 +37,10 @@ if(mode==='build'){
  mkdirSync(buildRoot,{recursive:true});
  run('npm',['exec','--','expo','prebuild','--platform','ios','--no-install'],mobile);
  // CocoaPods autolinking resolves the project from cwd, not --project-directory.
- run('pod',['install'],join(mobile,'ios'));
+ // Pod prepare scripts compile host binaries. Use the selected Xcode's SDK
+ // so a newer Command Line Tools SDK cannot be mixed with an older linker.
+ const podEnv={...process.env,SDKROOT:capture('xcrun',['--sdk','macosx','--show-sdk-path'])};
+ run('pod',['install'],join(mobile,'ios'),podEnv);
  // Keep Xcode's simulator signing: disabling it breaks SecureStore entitlements.
  run('xcodebuild',['-workspace',join(mobile,'ios/dolpin.xcworkspace'),'-scheme','dolpin','-configuration','Release','-sdk','iphonesimulator','-destination','generic/platform=iOS Simulator','-derivedDataPath',buildRoot,'ARCHS=arm64','CODE_SIGNING_ALLOWED=YES','CODE_SIGN_IDENTITY=-','build']);
  if(!existsSync(join(app,'main.jsbundle')))throw new Error('Preview must contain its own JS bundle.');

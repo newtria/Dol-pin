@@ -1,35 +1,38 @@
 version: 2
 updates:
-  # Dart / Flutter packages (pub)
-  - package-ecosystem: "pub"
+  # Active npm workspaces only; the Flutter archive is not maintained.
+  - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
-      - "pub"
+      - "npm"
     ignore:
-      # Pub majors require source/platform migrations and should be scheduled
-      # explicitly instead of opening repeat red CI PRs.
+      # Major upgrades require a coordinated review.
       - dependency-name: "*"
         update-types:
           - "version-update:semver-major"
-    # Group patch / minor bumps so they land as a single PR per week
-    # instead of a flood that nobody triages. Allowed major bumps still
-    # come in as individual PRs because they tend to be breaking.
+      # Expo pins compatible native/React versions, including 0.x RN minors.
+      - dependency-name: "react-native*"
+        update-types:
+          - "version-update:semver-minor"
+      - dependency-name: "expo*"
+        update-types:
+          - "version-update:semver-minor"
+      - dependency-name: "@expo/*"
+        update-types:
+          - "version-update:semver-minor"
+      - dependency-name: "react"
+        update-types:
+          - "version-update:semver-minor"
+      - dependency-name: "react-dom"
+        update-types:
+          - "version-update:semver-minor"
     groups:
-      pub-production-patches:
-        dependency-type: "production"
-        update-types:
-          - "patch"
-      pub-production-minors:
-        dependency-type: "production"
-        update-types:
-          - "minor"
-      pub-dev-dependencies:
-        dependency-type: "development"
+      npm-patch-minor:
         update-types:
           - "patch"
           - "minor"

@@ -6,14 +6,9 @@ on:
   pull_request:
     branches: [main]
 
-# Flutter SDK pinned to match mise.toml / local dev. Bumping this should
-# happen together with `mise use asdf:mise-plugins/mise-flutter@<version>`
-# so local and CI stay aligned.
-env:
-  FLUTTER_VERSION: '3.44.8'
-
 jobs:
   database:
+    name: React Native, Next.js and backend QA
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -89,46 +84,21 @@ jobs:
         if: always()
         run: supabase stop
 
-  build:
+  backend-static:
+    name: Backend structure and types
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v7
-
-      - uses: subosito/flutter-action@v2
+      - uses: actions/setup-node@v4
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
-
+          node-version: '22.22.3'
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-
-      - name: Cache pub dependencies
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.pub-cache
-            .dart_tool
-          key: ${{ runner.os }}-pub-${{ env.FLUTTER_VERSION }}-${{ hashFiles('pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pub-${{ env.FLUTTER_VERSION }}-
-
-      - name: Install dependencies
-        run: flutter pub get --enforce-lockfile
-
-      - name: Analyze
-        run: flutter analyze
-
       - name: Check release structure
         run: node scripts/release-preflight.mjs --structure-only
-
       - name: Check Edge Functions
         run: |
           for fn in supabase/functions/*/index.ts; do
             deno check "$fn"
           done
-
-      - name: Test
-        run: flutter test

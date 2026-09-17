@@ -85,6 +85,8 @@ function isPlaceholder(key, value) {
     'your-',
     'placeholder',
     'changeme',
+    'change-me',
+    'replace_me',
     'imp00000000',
     'example.com',
   ]
@@ -99,17 +101,20 @@ function isPlaceholder(key, value) {
 
 const env = {
   ...parseEnvFile('.env'),
+  ...parseEnvFile('supabase/functions/.env'),
   ...process.env,
 }
 
-const requiredAppEnv = [
-  'SUPABASE_URL',
-  'SUPABASE_ANON_KEY',
-  'PORTONE_IMP_CODE',
-  'SENTRY_DSN',
+const clientConfigs = [
+  {path: 'apps/mobile', keys: ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY']},
+  {path: 'apps/web', keys: ['NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY', 'NEXT_PUBLIC_TOSS_CLIENT_KEY']},
 ]
 const requiredEdgeEnv = [
+  'SUPABASE_URL',
+  'SUPABASE_ANON_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',
+  'TOSS_SECRET_KEY',
+  'DOLPIN_WEB_URL',
   'PORTONE_IMP_KEY',
   'PORTONE_IMP_SECRET',
   'DOLPIN_ADMIN_ACTION_KEY',
@@ -119,6 +124,9 @@ const requiredEdgeEnv = [
 ]
 
 const edgeFunctionFiles = [
+  'supabase/functions/toss-payment/index.ts',
+  'supabase/functions/rental-payment/index.ts',
+  'supabase/functions/rental-recovery/index.ts',
   'supabase/functions/gemini-analyze/index.ts',
   'supabase/functions/push-notification/index.ts',
   'supabase/functions/verify-payment/index.ts',
@@ -128,6 +136,13 @@ const edgeFunctionFiles = [
 ]
 
 const requiredFiles = [
+  'package.json',
+  'apps/mobile/package.json',
+  'apps/mobile/app.json',
+  'apps/web/package.json',
+  'packages/contracts/src/index.ts',
+  'packages/api-client/src/index.ts',
+  'scripts/ios-preview.mjs',
   '.env.example',
   'supabase/config.toml',
   'supabase/migrations/017_reservation_state_machine.sql',
@@ -140,7 +155,11 @@ for (const file of requiredFiles) {
   checkFile(file)
 }
 
-for (const key of [...requiredAppEnv, ...requiredEdgeEnv]) {
+for (const client of clientConfigs) {
+  for (const key of client.keys) checkContains(`${client.path}/.env.example`, `${key}=`)
+}
+
+for (const key of requiredEdgeEnv) {
   checkContains('.env.example', `${key}=`, `${key} placeholder`)
 }
 
@@ -201,9 +220,10 @@ runCommand('node syntax check for resolve-dispute CLI', process.execPath, [
 ])
 
 if (!structureOnly) {
-  for (const key of requiredAppEnv) {
-    if (isPlaceholder(key, env[key])) {
-      failures.push(`missing release app env: ${key}`)
+  for (const client of clientConfigs) {
+    const clientEnv = {...parseEnvFile(`${client.path}/.env.local`), ...process.env}
+    for (const key of client.keys) {
+      if (isPlaceholder(key, clientEnv[key])) failures.push(`missing release client env: ${key}`)
     }
   }
   for (const key of requiredEdgeEnv) {
@@ -212,7 +232,7 @@ if (!structureOnly) {
     }
   }
 
-  for (const command of ['mise', 'supabase', 'deno']) {
+  for (const command of ['node', 'npm', 'supabase', 'deno']) {
     if (!hasCommand(command)) {
       failures.push(`missing required release CLI: ${command}`)
     }
@@ -223,23 +243,8 @@ if (!structureOnly) {
       runCommand(`deno check ${fn}`, 'deno', ['check', fn])
     }
   }
-
-  if (hasCommand('xcrun')) {
-    try {
-      const devices = execFileSync('xcrun', ['simctl', 'list', 'devices'], {
-        encoding: 'utf8',
-      })
-      if (devices.includes('Booted')) {
-        failures.push('iOS Simulator cleanup failed: Booted simulator remains')
-      }
-    } catch {
-      warnings.push('could not inspect iOS Simulator state with xcrun')
-    }
-  } else {
-    warnings.push('xcrun is unavailable; skipping simulator cleanup check')
-  }
 } else {
-  warnings.push('structure-only mode skipped env, CLI, and simulator checks')
+  warnings.push('structure-only mode skipped deployment env and CLI checks; simulator QA uses an explicit UDID')
 }
 
 for (const warning of warnings) {

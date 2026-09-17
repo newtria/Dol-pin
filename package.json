@@ -7,6 +7,7 @@
   ],
   "scripts": {
     "mobile": "npm run start -w @dolpin/mobile",
+    "web": "npm run dev -w @dolpin/web",
     "typecheck": "tsc --noEmit",
     "test:db": "bash scripts/test-db.sh",
     "test:recovery": "node --experimental-strip-types --test scripts/test-rental-recovery.mjs",
