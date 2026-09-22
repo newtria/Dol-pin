@@ -1,0 +1,6 @@
+"NSCameraUsageDescription" = "dol-pin menggunakan kamera untuk memotret item sewaan saat didaftarkan dan saat pengembalian dikonfirmasi.";
+"NSPhotoLibraryUsageDescription" = "dol-pin memerlukan akses ke galeri foto untuk mengunggah foto item sewaan dan konfirmasi pengembalian.";
+"NSPhotoLibraryAddUsageDescription" = "dol-pin menyimpan foto sewaan yang dibagikan ke galeri saat Anda mengetuk simpan.";
+"NSLocationWhenInUseUsageDescription" = "dol-pin menggunakan lokasi Anda untuk menampilkan item sewaan terdekat untuk konser yang akan Anda hadiri.";
+"NSBluetoothAlwaysUsageDescription" = "dol-pin memindai lightstick K-pop resmi melalui Bluetooth untuk memverifikasi keaslian saat Anda mendaftarkan item.";
+"NSBluetoothPeripheralUsageDescription" = "dol-pin berkomunikasi dengan lightstick K-pop resmi melalui Bluetooth untuk memverifikasi keaslian saat Anda mendaftarkan item.";

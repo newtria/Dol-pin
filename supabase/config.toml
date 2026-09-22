@@ -1,0 +1,80 @@
+project_id = "dol-pin"
+
+[api]
+enabled = true
+port = 55321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 55322
+shadow_port = 55320
+major_version = 17
+
+[studio]
+enabled = true
+port = 55323
+api_url = "http://127.0.0.1:55321"
+
+[inbucket]
+enabled = true
+port = 55324
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = ["http://127.0.0.1:3000/auth/callback", "http://localhost:3000/auth/callback", "dolpin://auth/callback"]
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+
+# Local-only SMS fixtures. Do not apply this configuration to a hosted project.
+[auth.sms]
+enable_signup = true
+enable_confirmations = true
+
+[auth.sms.test_otp]
+821055501001 = "123456"
+821055501002 = "123456"
+821055501003 = "123456"
+
+# The CLI requires a provider to enable phone auth even for test_otp. These are
+# deliberately invalid local fixture credentials; only the test numbers work.
+[auth.sms.twilio]
+enabled = true
+account_sid = "AC00000000000000000000000000000000"
+message_service_sid = "MG00000000000000000000000000000000"
+auth_token = "local-test-only-not-a-provider-credential"
+
+[functions.resolve-dispute]
+verify_jwt = false
+
+# Handler validates JWT for prepare; checkout/confirm require a scoped capability.
+[functions.toss-payment]
+verify_jwt = false
+
+[auth.external.google]
+enabled = false # scripts/configure-oauth.mjs
+client_id = "env(GOOGLE_CLIENT_ID)"
+secret = "env(GOOGLE_CLIENT_SECRET)"
+
+[auth.external.apple]
+enabled = false # scripts/configure-oauth.mjs
+client_id = "env(APPLE_CLIENT_ID)"
+secret = "env(APPLE_CLIENT_SECRET)"
+
+[auth.external.kakao]
+enabled = false # scripts/configure-oauth.mjs
+client_id = "env(KAKAO_CLIENT_ID)"
+secret = "env(KAKAO_CLIENT_SECRET)"
+
+[functions.rental-payment]
+verify_jwt = false # Handler validates the caller before commands.
+
+[functions.rental-recovery]
+verify_jwt = false # Exact service-role bearer required; never a user JWT.
+
+[functions.gemini-analyze]
+verify_jwt = false # Handler verifies the JWT before reserving account quota.

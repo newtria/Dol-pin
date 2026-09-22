@@ -9,9 +9,25 @@ build/
 .env
 .env.*
 !.env.example
+supabase/.branches/
+supabase/.temp/
+node_modules/
+node_modules
+.expo/
+.next/
+.next
+next-env.d.ts
+dist/
+*.tsbuildinfo
 *.g.dart.bak
 
 # Planning / design documents — kept locally, not in VCS.
 # Whitelist per-file if a docs PDF ever needs to ship.
 *.pdf
 dolda_기획서.md
+
+.next-*/
+.next-qa
+
+# Expo-generated native preview project; archived Flutter sources are in legacy/flutter.
+/apps/mobile/ios/

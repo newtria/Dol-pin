@@ -1,0 +1,38 @@
+{
+  "name": "dol-pin",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "mobile": "npm run start -w @dolpin/mobile",
+    "web": "npm run dev -w @dolpin/web",
+    "typecheck": "tsc --noEmit",
+    "test:db": "bash scripts/test-db.sh",
+    "test:recovery": "node --experimental-strip-types --test scripts/test-rental-recovery.mjs",
+    "test:recovery:local": "node --experimental-strip-types scripts/check-local-rental-recovery.mjs",
+    "test:finance": "node scripts/run-finance-tests.mjs",
+    "test:edge": "deno test --allow-env --allow-net supabase/functions",
+    "qa:web": "playwright test",
+    "qa:gateway": "node scripts/start-qa-gateway.mjs",
+    "check:migrations": "node scripts/check-migrations.mjs",
+    "build:qa": "node scripts/build-qa.mjs",
+    "ios:build": "node scripts/ios-preview.mjs build",
+    "ios:open": "node scripts/ios-preview.mjs open",
+    "qa:ios": "node scripts/ios-preview.mjs qa",
+    "test:mobile-errors": "node --experimental-strip-types --test scripts/test-mobile-errors.mjs",
+    "test:email-auth": "node --experimental-strip-types --test scripts/test-email-auth-input.mjs",
+    "test:email-auth:local": "node scripts/check-local-email-auth.mjs",
+    "ops:recovery": "node scripts/recovery-ops.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  },
+  "engines": {
+    "node": ">=22.22.0"
+  }
+}

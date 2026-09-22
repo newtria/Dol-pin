@@ -1,0 +1,26 @@
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+import {createClient} from '@supabase/supabase-js';
+const env = Object.fromEntries(readFileSync('apps/mobile/.env.local', 'utf8').trim().split('\n').map(line => {
+  const i = line.indexOf('='); return [line.slice(0, i), line.slice(i + 1)];
+}));
+const url = env.EXPO_PUBLIC_SUPABASE_URL;
+assert.match(url, /^http:\/\/127\.0\.0\.1:/, 'Local fixtures must never target a hosted API');
+const client = createClient(url, env.EXPO_PUBLIC_SUPABASE_ANON_KEY, {auth: {persistSession: false, autoRefreshToken: false}});
+const phone = '+821055501002';
+const sent = await client.auth.signInWithOtp({phone});
+assert.ifError(sent.error);
+const verified = await client.auth.verifyOtp({phone, token: '123456', type: 'sms'});
+assert.ifError(verified.error);
+assert.ok(verified.data.user?.id);
+const profile = await client.rpc('ensure_profile', {p_nickname: '차용자 테스트'});
+assert.ifError(profile.error);
+assert.equal(profile.data.id, verified.data.user.id);
+assert.equal(profile.data.phone.replace(/^\+/, ''), phone.slice(1));
+const own = await client.from('users').select('id,nickname').eq('id', verified.data.user.id).single();
+assert.ifError(own.error);
+assert.equal(own.data.nickname, '차용자 테스트');
+const forbidden = await client.from('users').insert({id: verified.data.user.id, phone: 'forged', nickname: 'forged', country: 'KR'});
+assert.ok(forbidden.error, 'Client must not create its own identity row directly');
+await client.auth.signOut();
+console.log('Local SMS OTP → verified profile → own RLS read passed; identity insert rejected.');

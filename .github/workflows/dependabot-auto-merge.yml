@@ -28,7 +28,7 @@ jobs:
 
       - name: Label major updates for manual review
         if: steps.meta.outputs.update-type == 'version-update:semver-major'
-        run: gh pr edit "$PR_URL" --add-label "dependencies,manual-review"
+        run: gh pr edit "$PR_URL" --add-label "dependencies,help wanted"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

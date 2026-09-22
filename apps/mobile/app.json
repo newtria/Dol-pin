@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "dol-pin",
+    "slug": "dol-pin",
+    "scheme": "dolpin",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "상품 및 반납 사진을 선택하기 위해 사진 접근이 필요합니다.",
+          "cameraPermission": "상품 및 반납 사진을 촬영하기 위해 카메라 접근이 필요합니다.",
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.dolpin.preview"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

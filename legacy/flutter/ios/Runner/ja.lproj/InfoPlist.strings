@@ -1,0 +1,6 @@
+"NSCameraUsageDescription" = "dol-pinは、レンタル品の登録時と返却確認時に写真を撮影するためカメラを使用します。";
+"NSPhotoLibraryUsageDescription" = "dol-pinは、レンタル品と返却確認の写真をアップロードするため写真ライブラリへのアクセスが必要です。";
+"NSPhotoLibraryAddUsageDescription" = "dol-pinは、保存をタップしたときに共有されたレンタル写真を写真ライブラリへ保存します。";
+"NSLocationWhenInUseUsageDescription" = "dol-pinは、参加予定のコンサート周辺のレンタル品を表示するため位置情報を使用します。";
+"NSBluetoothAlwaysUsageDescription" = "dol-pinは、出品時に公式K-popペンライトの真正性を確認するためBluetoothでペンライトを検索します。";
+"NSBluetoothPeripheralUsageDescription" = "dol-pinは、出品時に公式K-popペンライトの真正性を確認するためBluetoothでペンライトと通信します。";

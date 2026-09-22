@@ -6,40 +6,99 @@ on:
   pull_request:
     branches: [main]
 
-# Flutter SDK pinned to match mise.toml / local dev. Bumping this should
-# happen together with `mise use asdf:mise-plugins/mise-flutter@<version>`
-# so local and CI stay aligned.
-env:
-  FLUTTER_VERSION: '3.41.4'
-
 jobs:
-  build:
+  database:
+    name: React Native, Next.js and backend QA
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v7
-
-      - uses: subosito/flutter-action@v2
+      - uses: actions/setup-node@v4
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
-
-      - name: Cache pub dependencies
-        uses: actions/cache@v6
+          node-version: '22.22.3'
+          cache: npm
+      - run: npm ci
+      - uses: supabase/setup-cli@v1
         with:
-          path: |
-            ~/.pub-cache
-            .dart_tool
-          key: ${{ runner.os }}-pub-${{ env.FLUTTER_VERSION }}-${{ hashFiles('pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pub-${{ env.FLUTTER_VERSION }}-
+          version: 2.107.0
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: npm run check:migrations
+      - name: Start isolated local Supabase
+        run: supabase start -x vector,logflare
+      - name: Rebuild schema from zero
+        run: supabase db reset --local --yes
+      - name: Exercise database authority and RLS
+        run: bash scripts/test-db.sh
+      - name: Configure local clients
+        run: node scripts/setup-local-env.mjs
+      - name: Exercise Auth and Storage through public APIs
+        run: |
+          node scripts/check-local-auth.mjs
+          npm run test:email-auth:local
+          node scripts/check-local-products.mjs
+          node scripts/check-local-rentals.mjs
+      - name: Check shared contracts and clients
+        run: |
+          npm run typecheck
+          npm run typecheck -w @dolpin/web
+      - name: Exercise payment failures and durable recovery
+        run: |
+          npm run test:edge
+          npm run test:recovery
+          npm run test:mobile-errors
+          npm run test:email-auth
+          npm run test:recovery:local
+          npm run test:finance
+      - name: Build consumer web
+        run: npm run build -w @dolpin/web
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+      - name: Validate Expo iOS bundle
+        run: npm run export -w @dolpin/mobile
+      - name: Browser transaction QA (local provider fixture)
+        run: |
+          npx playwright install --with-deps --no-shell chromium
+          npm run build:qa
+          npm run qa:web
+      - name: Exercise the actual scheduled recovery delivery
+        run: |
+          supabase functions serve > /tmp/dolpin-edge.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            status=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:55321/functions/v1/rental-recovery || true)
+            if [ "$status" = "401" ]; then break; fi
+            sleep 2
+          done
+          node scripts/check-local-recovery-schedule.mjs
+          npm run ops:recovery -- --check
+      - name: Verify selective catalog search plan
+        run: docker exec -i supabase_db_dol-pin psql -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/qa/catalog-plan.sql
+      - name: Upload failed browser evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-qa
+          path: /tmp/dolpin-qa-results
+          retention-days: 7
+      - name: Stop local services
+        if: always()
+        run: supabase stop
 
-      - name: Install dependencies
-        run: flutter pub get --enforce-lockfile
-
-      - name: Analyze
-        run: flutter analyze
-
-      - name: Test
-        run: flutter test
+  backend-static:
+    name: Backend structure and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.3'
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check release structure
+        run: node scripts/release-preflight.mjs --structure-only
+      - name: Check Edge Functions
+        run: |
+          for fn in supabase/functions/*/index.ts; do
+            deno check "$fn"
+          done

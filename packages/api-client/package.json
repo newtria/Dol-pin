@@ -1,0 +1,8 @@
+{
+  "name": "@dolpin/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {".": "./src/index.ts", "./errors": "./src/errors.ts"},
+  "dependencies": {"@dolpin/contracts": "0.1.0", "@supabase/supabase-js": "2.116.0"}
+}
