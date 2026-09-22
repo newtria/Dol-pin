@@ -23,7 +23,7 @@ const borrower = await actor('+821055501002');
 const outsider = await actor('+821055501003');
 const created = await lender.client.from('rental_items').insert({lender_id:lender.id,
  title:'[검증] 예약 경합 응원봉', category:'lightstick', photos:['https://example.invalid/fixture.png'],
- daily_price:5000, deposit:30000, currency:'KRW', pickup_method:'direct'}).select().single();
+ daily_price:5000, deposit:30000, currency:'KRW', pickup_method:'direct'}).select('id,updated_at').single();
 assert.ifError(created.error);
 const item=created.data;
 const day = new Date(Date.now()+86400000*7).toISOString().slice(0,10);

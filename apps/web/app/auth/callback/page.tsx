@@ -9,8 +9,8 @@ export default function Callback() {
   const {client} = useApi(); const router = useRouter(); const [error,setError] = useState<unknown>();
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const code = params.get('code'); const failure = params.get('error_description') ?? params.get('error');
-    if (failure || !code) {setError(new Error(failure ?? '인증 코드가 없습니다. 다시 로그인해 주세요.')); return;}
+    const code = params.get('code');
+    if (params.has('error_description') || params.has('error') || !code) {setError({code: 'AUTH_CALLBACK_INVALID'}); return;}
     if (!exchanges.has(code)) exchanges.set(code, (async () => {
       const {error} = await client.auth.exchangeCodeForSession(code); if (error) throw error;
     })());

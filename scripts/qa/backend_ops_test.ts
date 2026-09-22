@@ -238,7 +238,20 @@ Deno.test("transient recovery errors back off and escalate after eight failures"
       "backoff ignored",
     );
     assert(providerCalls === 1, "worker retried before due");
+    const earlyRetries = await Promise.all(
+      Array.from({ length: 4 }, () =>
+        call(money, { action: "refund", reservationId: r.id })
+      ),
+    );
+    assert(
+      earlyRetries.every((retry) => retry.body.status === "processing") &&
+        providerCalls === 1,
+      "manual/concurrent retry bypassed database backoff",
+    );
     for (let i = 1; i < 8; i++) {
+      await localSql(
+        `UPDATE public.rental_money_operations SET next_attempt_at=now()-interval '1 second' WHERE reservation_id='${r.id}';`,
+      );
       await call(money, { action: "refund", reservationId: r.id });
     }
     const row = checked(

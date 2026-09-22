@@ -11,18 +11,19 @@ import {useSession} from '../../src/session';
 import {Button,ErrorText,s} from '../../src/ui';
 export default function Rental(){
  const pathname=usePathname(); const {id}=useLocalSearchParams<{id:string}>(); const {session}=useSession(); const queries=useQueryClient();
- const rental=useQuery({queryKey:['rental',id,session?.user.id],queryFn:()=>api.rental(id),enabled:!!session&&pathname===`/rentals/${id}`,refetchInterval:5000});
+ const rental=useQuery({queryKey:['rental',id,session?.user.id],queryFn:()=>api.rental(id),enabled:!!session&&pathname===`/rentals/${id}`,refetchInterval:query=>pathname===`/rentals/${id}`&&query.state.data?.status&&['requested','accepted','pending','paid','picked_up','returned','disputed'].includes(query.state.data.status)?5000:false});
  const action=useMutation({mutationFn:(kind:'accept'|'reject'|'cancel')=>api.respondToRental(id,kind),onSettled:()=>{void queries.invalidateQueries({queryKey:['rental',id]});void queries.invalidateQueries({queryKey:['rentals']});}});
  const payment=useMutation({mutationFn:async()=>{const {checkoutUrl}=await api.preparePayment(id,true);await WebBrowser.openBrowserAsync(checkoutUrl);await queries.invalidateQueries({queryKey:['rental',id]});}});
  useFocusEffect(useCallback(()=>{void queries.invalidateQueries({queryKey:['rental',id]});},[id,queries]));
  const [notice,setNotice]=useState('');
  const [photo,setPhoto]=useState<ImagePicker.ImagePickerAsset>();
  const choosePhoto=useMutation({mutationFn:async()=>{const result=await ImagePicker.launchImageLibraryAsync({mediaTypes:['images'],quality:0.8,base64:true});if(!result.canceled)setPhoto(result.assets[0]);}});
- const refresh=()=>{void queries.invalidateQueries({queryKey:['rental',id]});void queries.invalidateQueries({queryKey:['rentals']});};
+ const refresh=()=>{void queries.invalidateQueries({queryKey:['rental',id]});void queries.invalidateQueries({queryKey:['rentals']});void queries.invalidateQueries({queryKey:['payment-recovery',id]});};
  const command=useMutation({mutationFn:async(kind:'pickup'|'refund'|'settle'|'recover')=>{
   if(kind==='pickup'){await api.pickupRental(id);return;}
-  const result=kind==='recover'?await api.recoverPayment(id):await api.moneyAction(id,kind);
-  setNotice(result.status==='processing'?'결제사 결과를 확인 중입니다. 앱을 닫아도 서버에서 계속 확인합니다.':'처리 결과를 반영했습니다.');
+  if(kind==='recover'){await api.recoveryStatus(id);setNotice('처리 상태를 다시 확인했습니다.');return;}
+  const result=await api.moneyAction(id,kind);
+  setNotice(result.status==='processing'?'처리 요청을 접수했습니다. 아래에서 현재 상태를 확인해 주세요.':'처리 결과를 반영했습니다.');
  },onSettled:refresh});
  const returnPhoto=useMutation({mutationFn:async()=>{
   if(!session)throw new Error('로그인이 필요합니다.');
@@ -36,15 +37,16 @@ export default function Rental(){
  },onSuccess:()=>setPhoto(undefined),onSettled:refresh});
  const r=session?rental.data:undefined;const terms=rentalTerms(r?.terms_snapshot);
  useEffect(()=>{setNotice('');setPhoto(undefined);},[id,session?.user.id,r?.status]);
- const guidance=r?rentalGuidance(r,r.lender_id===session?.user.id):null;
- const recovery=useQuery({queryKey:['payment-recovery',id,session?.user.id],queryFn:()=>api.recoverPayment(id),enabled:!!r&&r.status==='accepted'&&!!r.payment_attempt_merchant_uid&&r.borrower_id===session?.user.id,refetchInterval:5000,retry:false});
+ const hasRecovery=!!r&&(!!r.payment_action||(r.status==='accepted'&&!!r.payment_attempt_merchant_uid));
+ const recovery=useQuery({queryKey:['payment-recovery',id,session?.user.id],queryFn:()=>api.recoveryStatus(id),enabled:pathname===`/rentals/${id}`&&hasRecovery,refetchInterval:query=>pathname===`/rentals/${id}`&&query.state.data?.state!=='needs_review'?15000:false,retry:false});
+ const guidance=r?rentalGuidance(r,r.lender_id===session?.user.id,hasRecovery?recovery.data:undefined):null;
  useEffect(()=>{if(recovery.data)void queries.invalidateQueries({queryKey:['rental',id]});},[recovery.dataUpdatedAt,id,queries]);
- const evidence=useQuery({queryKey:['evidence',id,session?.user.id,r?.return_photo],queryFn:()=>api.evidenceUrl(r!.return_photo!),enabled:!!session&&!!r?.return_photo?.startsWith(`${id}/`),staleTime:240000});
- return <ScrollView contentContainerStyle={s.content}><Text style={s.title}>거래 상세</Text><ErrorText error={rental.error??action.error??payment.error??command.error??returnPhoto.error??choosePhoto.error??evidence.error}/>
+ const evidence=useQuery({queryKey:['evidence',id,session?.user.id,r?.return_photo],queryFn:()=>api.evidenceUrl(r!.return_photo!),enabled:pathname===`/rentals/${id}`&&!!session&&!!r?.return_photo?.startsWith(`${id}/`),staleTime:240000});
+ return <ScrollView contentContainerStyle={s.content}><Text style={s.title}>거래 상세</Text><ErrorText error={rental.error??action.error??payment.error??command.error??returnPhoto.error??choosePhoto.error??evidence.error??(hasRecovery?recovery.error:null)}/>
  {!session?<Text style={s.muted}>거래를 확인하려면 로그인해 주세요.</Text>:rental.isPending?<Text style={s.muted}>거래를 불러오고 있습니다.</Text>:null}
  {r?<><Text style={s.heading}>{rentalTitle(r)}</Text><Text style={s.body}>{rentalStatusLabels[r.status??'']??'상태 확인 필요'}</Text>
  <Text style={s.body}>{r.starts_at?formatKoreaTime(r.starts_at):r.rental_date} → {r.ends_at?formatKoreaTime(r.ends_at):r.return_date}</Text>
- <View style={s.card}><Text style={s.muted}>{r.lender_id===session?.user.id?'빌려주는 거래':'빌리는 거래'}</Text><Text style={s.heading}>{guidance?.title}</Text><Text style={s.body}>{guidance?.body}</Text>{r.status==='accepted'&&r.payment_due_at?<Text style={s.body}>결제 기한 {formatKoreaTime(r.payment_due_at)}</Text>:null}
+ <View style={s.card}><Text style={s.muted}>{r.lender_id===session?.user.id?'빌려주는 거래':'빌리는 거래'}</Text><Text style={s.heading}>{guidance?.title}</Text><Text style={s.body}>{guidance?.body}</Text>{hasRecovery&&recovery.data?.next_retry_at?<Text style={s.body}>다음 확인 예정: {formatKoreaTime(recovery.data.next_retry_at)} 이후</Text>:null}{hasRecovery&&recovery.data?.state==='needs_review'?<Text style={s.body}>문의용 거래 번호: {recovery.data.reference}</Text>:null}{r.status==='accepted'&&r.payment_due_at?<Text style={s.body}>결제 기한 {formatKoreaTime(r.payment_due_at)}</Text>:null}
  {r.status==='requested'&&r.lender_id===session?.user.id?<><Button label="예약 수락" onPress={()=>action.mutate('accept')} disabled={action.isPending}/><Button label="예약 거절" secondary onPress={()=>action.mutate('reject')} disabled={action.isPending}/></>:null}
  {r.status==='requested'&&r.borrower_id===session?.user.id?<Button label="요청 취소" secondary onPress={()=>action.mutate('cancel')} disabled={action.isPending}/>:null}
  {r.status==='accepted'&&(!r.payment_due_at||Date.parse(r.payment_due_at)>Date.now())&&!r.payment_attempt_merchant_uid&&r.borrower_id===session?.user.id?<Button label="결제하기" onPress={()=>payment.mutate()} disabled={payment.isPending}/>:null}
@@ -52,10 +54,10 @@ export default function Rental(){
  {r.payment_action?<Text style={s.muted}>환불 결과 확인 중에는 인수·반납을 진행할 수 없습니다.</Text>:null}
  {r.status==='accepted'&&r.payment_attempt_merchant_uid&&r.borrower_id===session?.user.id?<Button label="결제 결과 다시 확인" secondary disabled={command.isPending} onPress={()=>command.mutate('recover')}/>:null}
  {r.status==='paid'&&!r.payment_action&&r.lender_id===session?.user.id?<Button label="물품을 전달했어요" disabled={command.isPending} onPress={()=>command.mutate('pickup')}/>:null}
- {r.status==='paid'?<Button label={r.payment_action?'환불 결과 다시 확인':'거래 취소 · 전액 환불'} secondary disabled={command.isPending} onPress={()=>r.payment_action?command.mutate('refund'):Alert.alert('거래를 취소할까요?',`대여료와 보증금 합계 ${formatWon(r.total_paid)} 전액을 원래 결제 수단으로 환불합니다. 취소 후에는 이 거래로 물품을 받을 수 없습니다.`,[{text:'거래 유지',style:'cancel'},{text:`취소하고 ${formatWon(r.total_paid)} 환불`,style:'destructive',onPress:()=>command.mutate('refund')}])}/>:null}
+ {r.status==='paid'?<Button label={r.payment_action?'처리 상태 다시 확인':'거래 취소 · 전액 환불'} secondary disabled={command.isPending} onPress={()=>r.payment_action?command.mutate('recover'):Alert.alert('거래를 취소할까요?',`대여료와 보증금 합계 ${formatWon(r.total_paid)} 전액을 원래 결제 수단으로 환불합니다. 취소 후에는 이 거래로 물품을 받을 수 없습니다.`,[{text:'거래 유지',style:'cancel'},{text:`취소하고 ${formatWon(r.total_paid)} 환불`,style:'destructive',onPress:()=>command.mutate('refund')}])}/>:null}
  {r.status==='picked_up'&&!r.payment_action&&r.borrower_id===session?.user.id?<><Text style={s.muted}>반납 사진은 거래 당사자만 볼 수 있습니다.</Text><Button label={photo?"사진 다시 선택":"반납 사진 선택"} disabled={returnPhoto.isPending||choosePhoto.isPending} onPress={()=>choosePhoto.mutate()}/>{photo?<><Image source={{uri:photo.uri}} accessibilityLabel="제출할 반납 사진" style={{height:240,width:"100%"}} resizeMode="contain"/><Text style={s.body}>실제로 물품을 반납하셨나요? 제출하면 빌려주는 분에게 반납 확인을 요청합니다.</Text><Button label="사진 제거" secondary disabled={returnPhoto.isPending} onPress={()=>setPhoto(undefined)}/><Button label={returnPhoto.isPending?"반납 제출 중…":"반납 제출"} disabled={returnPhoto.isPending} onPress={()=>returnPhoto.mutate()}/></>:null}</>:null}
  {evidence.data?<Image source={{uri:evidence.data}} accessibilityLabel="반납 증빙" style={{height:240,width:'100%'}} resizeMode="contain"/>:null}
- {r.status==='returned'&&r.lender_id===session?.user.id?<Button label={r.payment_action?'보증금 반환 결과 다시 확인':'반납 수령 확인 · 보증금 반환'} disabled={command.isPending} onPress={()=>command.mutate('settle')}/>:null}
+ {r.status==='returned'&&r.lender_id===session?.user.id?<Button label={r.payment_action?'처리 상태 다시 확인':'반납 수령 확인 · 보증금 반환'} disabled={command.isPending} onPress={()=>command.mutate(r.payment_action?'recover':'settle')}/>:null}
  {r.status==='returned'&&r.borrower_id===session?.user.id?<Text style={s.muted}>대여자의 수령 확인 후 보증금을 반환합니다.</Text>:null}
  </View>
  <Text style={s.body}>대여료 {formatWon(r.rental_fee)}</Text><Text style={s.body}>보증금 {formatWon(r.deposit)}</Text><Text style={s.price}>합계 {formatWon(r.total_paid)}</Text>

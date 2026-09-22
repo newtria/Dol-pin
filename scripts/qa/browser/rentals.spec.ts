@@ -48,6 +48,7 @@ test('lost approval survives closing checkout and recovers from a fresh session'
   await expect(b.page.getByText('연결이 원활하지 않아 다시 확인 중입니다. 결제 실패로 확정된 상태는 아닙니다.')).toBeVisible();
   await expect(b.page.getByRole('main').getByRole('alert')).toHaveCount(0);
   await b.context.close();const recovered=await actor(browser,f.borrower,true);fresh=recovered.context;
+  expect((await request.post(`${gateway}/__qa/recovery-due`,{data:{tag:f.tag}})).ok()).toBeTruthy();
   await recovered.page.goto(path);
   await expect(recovered.page.getByText('결제 완료',{exact:true})).toBeVisible();
   await expect(recovered.page.getByText('인수·반납 장소: 공연장 2번 출구')).toBeVisible();
@@ -108,10 +109,12 @@ test('product registration uploads a real photo and persists pickup instructions
   await expect(l.page.getByAltText('등록할 상품 사진')).toBeVisible();
   await l.page.getByLabel('상품명',{exact:true}).fill(`${f.tag} registered`);
   await l.page.getByLabel('상품 설명',{exact:true}).fill('실제 등록 폼 QA');
-  await l.page.getByLabel('인수·반납 장소',{exact:true}).fill('공연장 3번 출구');
+  await l.page.getByLabel('공개할 만남 지역',{exact:true}).fill('공연장 인근');
+  await l.page.getByLabel('상세 인수·반납 장소',{exact:true}).fill('공연장 3번 출구');
   await l.page.getByRole('button',{name:'물품 등록',exact:true}).click();
   await expect(l.page).toHaveURL(/\/items\/[0-9a-f-]+$/);
-  await expect(l.page.getByText('인수·반납 장소: 공연장 3번 출구')).toBeVisible();expect(errors).toEqual([]);
+  await expect(l.page.getByText('만남 지역: 공연장 인근')).toBeVisible();
+  await expect(l.page.getByText('상대에게 안내할 상세 장소: 공연장 3번 출구')).toBeVisible();expect(errors).toEqual([]);
  } finally {await l.context.close();expect((await request.post(`${gateway}/__qa/cleanup`,{data:{tag:f.tag}})).ok()).toBeTruthy();}
 });
 
@@ -122,9 +125,27 @@ test('checkout recovers a lost response automatically without presenting failure
   await request.post(`${gateway}/__qa/lose-approval`);await paymentReturn(b.page);
   await expect(b.page.getByRole('heading',{name:'결제 결과 확인 중'})).toBeVisible();
   await expect(b.page.getByRole('main').getByRole('alert')).toHaveCount(0);
+  await expect(b.page.getByText('연결이 원활하지 않아 다시 확인 중입니다. 결제 실패로 확정된 상태는 아닙니다.')).toBeVisible();
+  expect((await request.post(`${gateway}/__qa/recovery-due`,{data:{tag:f.tag}})).ok()).toBeTruthy();
   await expect(b.page.getByRole('heading',{name:'결제 완료',exact:true})).toBeVisible();
   await b.page.reload();await expect(b.page.getByRole('heading',{name:'결제 완료',exact:true})).toBeVisible();
   await b.page.getByRole('link',{name:'거래로 돌아가기'}).click();await expect(b.page).toHaveURL(new RegExp(path+'$'));expect(errors).toEqual([]);
+ }finally{await b.context.close();await l.context.close();expect((await request.post(`${gateway}/__qa/cleanup`,{data:{tag:f.tag}})).ok()).toBeTruthy();}
+});
+
+test('reviewed payment explains that automatic work stopped in checkout and rental detail',async({browser,request})=>{
+ const f=await seed(request);const b=await actor(browser,f.borrower),l=await actor(browser,f.lender);
+ try {
+  const path=await requestRental(b.page,f.item.id);await accept(l.page,b.page,path);
+  await request.post(`${gateway}/__qa/lose-approval`);await paymentReturn(b.page);
+  await expect(b.page.getByText('연결이 원활하지 않아 다시 확인 중입니다. 결제 실패로 확정된 상태는 아닙니다.')).toBeVisible();
+  expect((await request.post(`${gateway}/__qa/review-checkout`,{data:{tag:f.tag}})).ok()).toBeTruthy();
+  await expect(b.page.getByRole('heading',{name:'결제 처리에 운영 확인이 필요해요'})).toBeVisible();
+  await expect(b.page.getByText('자동 처리가 멈췄습니다.',{exact:false})).toBeVisible();
+  await b.page.getByRole('link',{name:'거래로 돌아가기'}).click();
+  await expect(b.page).toHaveURL(new RegExp(path+'$'));
+  await expect(b.page.getByRole('heading',{name:'결제 처리에 운영 확인이 필요해요'})).toBeVisible();
+  await expect(b.page.getByText(`문의용 거래 번호: ${path.split('/').pop()}`)).toBeVisible();
  }finally{await b.context.close();await l.context.close();expect((await request.post(`${gateway}/__qa/cleanup`,{data:{tag:f.tag}})).ok()).toBeTruthy();}
 });
 

@@ -17,7 +17,7 @@ export default function NewItem() {
   const [uploading, setUploading] = useState(false);
   const form = useForm<ItemInput>({resolver: zodResolver(itemInput), defaultValues: {
     title: '', description: '', category: 'lightstick', concert_id: null,
-    daily_price: 5000, deposit: 30000, photos: [], pickup_method: 'direct', pickup_note: '',
+    daily_price: 5000, deposit: 30000, photos: [], pickup_method: 'direct', pickup_area: '', pickup_note: '',
   }});
   const photos = form.watch('photos');
   const category = form.watch('category');
@@ -55,7 +55,11 @@ export default function NewItem() {
     <Text style={s.muted}>품목</Text><ScrollView horizontal contentContainerStyle={{gap: 8}}>{categories.map(c => <Button key={c} label={categoryLabels[c]} secondary={category !== c} onPress={() => form.setValue('category', c)}/>)}</ScrollView>
     <Controller control={form.control} name="description" render={({field}) => <Field label="상품 설명" multiline value={field.value} onChangeText={field.onChange}/>}/>
     <ValidationText error={form.formState.errors.description?.message}/>
-    <Controller control={form.control} name="pickup_note" render={({field}) => <Field label="인수·반납 장소" value={field.value} onChangeText={field.onChange}/>}/>
+    <Controller control={form.control} name="pickup_area" render={({field}) => <Field label="공개할 만남 지역" value={field.value} onChangeText={field.onChange}/>}/>
+    <Text style={s.muted}>공연장·역 이름처럼 대략적인 지역만 입력해 주세요. 상세 주소와 연락처는 공개하지 마세요.</Text>
+    <ValidationText error={form.formState.errors.pickup_area?.message}/>
+    <Controller control={form.control} name="pickup_note" render={({field}) => <Field label="상세 인수·반납 장소" value={field.value} onChangeText={field.onChange}/>}/>
+    <Text style={s.muted}>예약을 수락한 거래 상대에게만 안내됩니다.</Text>
     <ValidationText error={form.formState.errors.pickup_note?.message}/>
     {(['daily_price', 'deposit'] as const).map(name => <View key={name} style={{gap: 8}}><Controller control={form.control} name={name} render={({field}) => <Field label={name === 'daily_price' ? '하루 대여료 (원)' : '보증금 (원)'} keyboardType="number-pad" value={String(field.value)} onChangeText={v => field.onChange(v === '' ? 0 : Number(v))}/>}/><ValidationText error={form.formState.errors[name]?.message}/></View>)}
     <Text style={s.muted}>직접 인수·반납하는 물품입니다.</Text>

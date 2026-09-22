@@ -78,3 +78,43 @@ Deno.test('provider mismatch cannot mark paid; terminal failure releases hold; c
   assert(checked(await f.admin.from('reservations').select('status').eq('id',r2.id).single()).status==='cancelled','concurrent refund not completed');
  } finally {await f.cleanup();}
 });
+
+Deno.test('checkout polling is read-only and repeated confirmation/recovery cannot bypass backoff',async()=>{
+ const f=await fixture();const pg=fakeProvider();let lookups=0,approvals=0;
+ const checkout=checkoutHandler(()=>({
+  ...pg.factory('toss'),
+  async lookupOrder(id){lookups++;return await pg.factory('toss').lookupOrder(id);},
+  async confirm(id,orderId,total){approvals++;return await pg.factory('toss').confirm(id,orderId,total);},
+ }));
+ const call=async(body:unknown)=>{
+  const res=await checkout(new Request('http://127.0.0.1/test',{method:'POST',headers:{Authorization:`Bearer ${f.borrower.session.access_token}`},body:JSON.stringify(body)}));
+  return {code:res.status,data:await res.json()};
+ };
+ try {
+  const r=await f.rental();
+  const prepared=await call({action:'prepare',reservationId:r.id});
+  const q=new URLSearchParams(new URL(prepared.data.checkoutUrl).hash.slice(1));
+  const orderId=q.get('orderId'),token=q.get('token');
+  const confirm={action:'confirm',orderId,token,paymentKey:'qa-'+r.id,amount:r.total_paid};
+  pg.loseNextApproval();
+  assert((await call(confirm)).code===502,'approval response should be unknown');
+  assert(lookups===1&&approvals===1,'unexpected first provider calls');
+  const polls=await Promise.all(Array.from({length:4},()=>call({action:'status',orderId,token})));
+  assert(polls.every(p=>p.data.status==='processing'&&p.data.recoveryState==='retry_scheduled'),'retry state missing');
+  const retries=await Promise.all([call(confirm),call({action:'recover',reservationId:r.id})]);
+  assert(retries.every(p=>p.data.status==='processing'),'early retry did not remain pending');
+  assert(lookups===1&&approvals===1,'status or repeated key bypassed backoff');
+  await localSql(`UPDATE public.toss_checkouts SET next_attempt_at=now()-interval '1 second' WHERE reservation_id='${r.id}';`);
+  // Polling stays read-only even when work is due; a worker/recover command owns reconciliation.
+  await call({action:'status',orderId,token});
+  assert(lookups===1,'due status poll contacted provider');
+  assert((await call({action:'recover',reservationId:r.id})).data.status==='paid','due recovery did not reconcile approval');
+  assert(Number(lookups)===2&&approvals===1,'recovery repeated approval');
+  const payment=pg.payments.get(orderId!)!;
+  payment.status='cancelled';payment.refunded=payment.total;
+  // Paid-state external cancellation has a separate reconciliation policy.
+  // Replaying confirmation must neither report an invented expiry nor call PG.
+  assert((await call(confirm)).data.status==='paid','completed approval replay reported false expiry');
+  assert(Number(lookups)===2&&approvals===1,'completed approval replay contacted provider');
+ } finally {await f.cleanup();}
+});

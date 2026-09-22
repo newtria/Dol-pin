@@ -131,13 +131,25 @@ export function createHandler(providers: ProviderFactory = paymentProvider) {
       }
       if (body.action === "status") {
         const { data: r, error } = await admin.from("reservations").select(
-          "status",
+          "status,payment_attempt_merchant_uid",
         ).eq("id", c.reservation_id).single();
         if (error) throw error;
+        const recoveryState = r.status !== "accepted"
+          ? "idle"
+          : c.review_required_at || (r.payment_attempt_merchant_uid && r.payment_attempt_merchant_uid !== c.order_id)
+          ? "needs_review"
+          : c.lease_until && Date.parse(c.lease_until) > Date.now()
+          ? "processing"
+          : c.next_attempt_at && Date.parse(c.next_attempt_at) > Date.now()
+          ? "retry_scheduled"
+          : "processing";
         return jsonResponse(200, {
-          ...(r.status === "accepted"
-            ? await reconcileCheckout(admin, c.order_id, undefined, providers)
-            : { status: r.status, reservationId: c.reservation_id }),
+          // Status polling is read-only. Recovery runs through its own command
+          // and worker, both governed by the database claim's retry clock.
+          status: r.status === "accepted" ? "processing" : r.status,
+          reservationId: c.reservation_id,
+          recoveryState,
+          nextRetryAt: recoveryState === "retry_scheduled" ? c.next_attempt_at : null,
           mobile: session.mobile,
         });
       }

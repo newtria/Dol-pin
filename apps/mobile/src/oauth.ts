@@ -5,10 +5,9 @@ WebBrowser.maybeCompleteAuthSession();
 const exchanges = new Map<string, Promise<void>>();
 export function completeOAuth(url: string) {
   const params = new URL(url).searchParams;
-  const error = params.get('error_description') ?? params.get('error');
-  if (error) return Promise.reject(new Error(error));
+  if (params.has('error_description') || params.has('error')) return Promise.reject({code: 'AUTH_CALLBACK_INVALID'});
   const code = params.get('code');
-  if (!code) return Promise.reject(new Error('로그인 인증 코드가 없습니다. 다시 로그인해 주세요.'));
+  if (!code) return Promise.reject({code: 'AUTH_CALLBACK_INVALID'});
   if (!exchanges.has(code)) exchanges.set(code, (async () => {
     const {error} = await client.auth.exchangeCodeForSession(code);
     if (error) throw error;

@@ -25,10 +25,63 @@ BEGIN
  IF public.claim_toss_confirmation(c.order_id,lease2,'fixture-key') THEN RAISE EXCEPTION 'concurrent approval claim allowed'; END IF;
  PERFORM public.release_toss_confirmation(c.order_id,lease2);
  IF public.claim_toss_confirmation(c.order_id,lease2,'fixture-key') THEN RAISE EXCEPTION 'wrong lease released claim'; END IF;
+ PERFORM public.record_rental_recovery_attempt('checkout',c.order_id,lease1,'UPSTREAM_UNAVAILABLE');
  PERFORM public.release_toss_confirmation(c.order_id,lease1);
- PERFORM public.finish_toss_confirmation(c.order_id,'fixture-key');
+ IF public.claim_toss_confirmation(c.order_id,lease2,'fixture-key')
+ OR public.claim_toss_confirmation(c.order_id,lease2,NULL) THEN RAISE EXCEPTION 'checkout retry bypassed backoff'; END IF;
+ UPDATE public.toss_checkouts SET next_attempt_at=clock_timestamp()-interval '1 second' WHERE order_id=c.order_id;
+ IF NOT public.claim_toss_confirmation(c.order_id,lease2,'fixture-key') THEN RAISE EXCEPTION 'due checkout retry failed'; END IF;
+ BEGIN
+  PERFORM public.finish_toss_confirmation(c.order_id,'fixture-key',lease1);
+  RAISE EXCEPTION 'old worker completed checkout after handoff';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM='old worker completed checkout after handoff' THEN RAISE; END IF; END;
+ BEGIN
+  PERFORM public.fail_toss_confirmation(c.order_id,lease1);
+  RAISE EXCEPTION 'old worker expired checkout after handoff';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM='old worker expired checkout after handoff' THEN RAISE; END IF; END;
+ UPDATE public.toss_checkouts SET lease_until=clock_timestamp()-interval '1 second' WHERE order_id=c.order_id;
+ BEGIN
+  PERFORM public.finish_toss_confirmation(c.order_id,'fixture-key',lease2);
+  RAISE EXCEPTION 'expired worker completed checkout before handoff';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM='expired worker completed checkout before handoff' THEN RAISE; END IF; END;
+ BEGIN
+  PERFORM public.fail_toss_confirmation(c.order_id,lease2);
+  RAISE EXCEPTION 'expired worker expired checkout before handoff';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM='expired worker expired checkout before handoff' THEN RAISE; END IF; END;
+ PERFORM public.record_rental_recovery_attempt('checkout',c.order_id,lease2,'OUTCOME_PENDING',false,false);
+ IF (SELECT last_error_code FROM public.toss_checkouts WHERE order_id=c.order_id)<>'UPSTREAM_UNAVAILABLE'
+ THEN RAISE EXCEPTION 'expired worker overwrote recovery state'; END IF;
+ IF NOT public.claim_toss_confirmation(c.order_id,lease1,'fixture-key') THEN RAISE EXCEPTION 'expired checkout not reclaimed'; END IF;
+ UPDATE public.reservations SET payment_attempt_merchant_uid='different-order' WHERE id=r;
+ BEGIN
+  PERFORM public.fail_toss_confirmation(c.order_id,lease1);
+  RAISE EXCEPTION 'checkout expired another payment attempt';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM='checkout expired another payment attempt' THEN RAISE; END IF; END;
+ BEGIN
+  PERFORM public.finish_toss_confirmation(c.order_id,'fixture-key',lease1);
+  RAISE EXCEPTION 'checkout replaced another payment attempt';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM='checkout replaced another payment attempt' THEN RAISE; END IF; END;
+ UPDATE public.reservations SET payment_attempt_merchant_uid=c.order_id WHERE id=r;
+ PERFORM public.finish_toss_confirmation(c.order_id,'fixture-key',lease1);
+ IF public.fail_toss_confirmation(c.order_id,lease1)<>'paid' THEN RAISE EXCEPTION 'late failure reported false expiry'; END IF;
+ IF public.claim_toss_confirmation(c.order_id,lease2,'fixture-key') THEN RAISE EXCEPTION 'completed checkout claimed PG work'; END IF;
  op:=public.begin_rental_money_operation(r,'11000000-0000-4000-8000-000000000002','refund');
  IF (public.begin_rental_money_operation(r,'11000000-0000-4000-8000-000000000001','refund')).id<>op.id THEN RAISE EXCEPTION 'retry changed financial intent'; END IF;
+ IF (public.claim_rental_money_operation(op.id,lease1)).id IS NULL THEN RAISE EXCEPTION 'initial money claim failed'; END IF;
+ PERFORM public.record_rental_recovery_attempt('money',op.id::text,lease1,'UPSTREAM_UNAVAILABLE');
+ PERFORM public.release_rental_money_operation(op.id,lease1);
+ IF (public.claim_rental_money_operation(op.id,lease2)).id IS NOT NULL THEN RAISE EXCEPTION 'money retry bypassed backoff'; END IF;
+ UPDATE public.rental_money_operations SET next_attempt_at=clock_timestamp()-interval '1 second' WHERE id=op.id;
+ IF (public.claim_rental_money_operation(op.id,lease2)).id IS NULL THEN RAISE EXCEPTION 'due money retry failed'; END IF;
+ BEGIN
+  PERFORM public.finish_rental_money_operation(op.id,lease1);
+  RAISE EXCEPTION 'old worker completed money operation after handoff';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM='old worker completed money operation after handoff' THEN RAISE; END IF; END;
+ UPDATE public.rental_money_operations SET lease_until=clock_timestamp()-interval '1 second' WHERE id=op.id;
+ BEGIN
+  PERFORM public.finish_rental_money_operation(op.id,lease2);
+  RAISE EXCEPTION 'expired worker completed money operation before handoff';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM='expired worker completed money operation before handoff' THEN RAISE; END IF; END;
  PERFORM set_config('app.rental_money_operation_id','',true);
  BEGIN
   PERFORM public.clear_reservation_payment_action(r,'refund_pending');

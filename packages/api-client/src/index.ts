@@ -3,10 +3,13 @@ export {ApiRequestError} from './errors.ts';
 import {RentalRequestRejected} from './pending-rentals.ts';
 export {createPendingRentals, RentalRequestRejected, type RentalRequest} from './pending-rentals.ts';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import {itemInput, type ItemInput, type Database} from '@dolpin/contracts';
+import {itemInput, type ItemInput, type Database, type RentalRecoveryStatus} from '@dolpin/contracts';
 
 export type Client = SupabaseClient<Database>;
-export type Item = Database['public']['Tables']['rental_items']['Row'];
+export type Item = Omit<Database['public']['Tables']['rental_items']['Row'], 'pickup_note' | 'pickup_location' | 'imei'>;
+// Explicit projection matches the database's public column grant. A wildcard
+// would request private address/device columns and must be rejected by the DB.
+const itemColumns = 'id,lender_id,concert_id,category,title,description,photos,daily_price,currency,deposit,condition_grade,vlm_tag,bt_verified,imei_verified,pickup_method,pickup_area,available_from,available_to,status,created_at,updated_at' as const;
 export type RentalCursor = {createdAt:string;id:string};
 export type ConcertCursor = {date:string;id:string};
 export type Concert = Database['public']['Tables']['concerts']['Row'];
@@ -73,7 +76,7 @@ export function createApi(client: Client) {
       return {rows:rows.slice(0,50),nextCursor:rows.length>50?{date:last.concert_date,id:last.id}:undefined};
     },
     async items(filter: {concertId?: string; category?: string; search?: string},cursor?:RentalCursor) {
-      let query = client.from('rental_items').select('*').eq('status', 'active').order('created_at', {ascending: false}).order('id',{ascending:false});
+      let query = client.from('rental_items').select(itemColumns).eq('status', 'active').order('created_at', {ascending: false}).order('id',{ascending:false});
       if (filter.concertId) query = query.eq('concert_id', filter.concertId);
       if (filter.category) query = query.eq('category', filter.category);
       if (filter.search?.trim()) query = query.ilike('title', `%${filter.search.trim().replace(/[\\%_]/g, '\\$&')}%`);
@@ -83,6 +86,12 @@ export function createApi(client: Client) {
     },
     async recoverPayment(reservationId:string) {
       return invoke('toss-payment',{action:'recover',reservationId});
+    },
+    async recoveryStatus(reservationId:string):Promise<RentalRecoveryStatus> {
+      const rows=value(await client.rpc('rental_recovery_status',{p_reservation_id:reservationId}));
+      const result=rows?.[0];
+      if(!result||!['idle','processing','retry_scheduled','needs_review'].includes(result.state))throw new Error('결제 처리 상태를 확인하지 못했습니다.');
+      return result as RentalRecoveryStatus;
     },
     async moneyAction(reservationId:string,action:'refund'|'settle') {
       return invoke('rental-payment',{action,reservationId});
@@ -101,13 +110,16 @@ export function createApi(client: Client) {
       return result.signedUrl;
     },
     async item(id: string) {
-      return value(await client.from('rental_items').select('*').eq('id', id).single());
+      return value(await client.from('rental_items').select(itemColumns).eq('id', id).single());
+    },
+    async ownItemPickupNote(id: string) {
+      return value(await client.rpc('own_item_pickup_note', {p_item_id: id}));
     },
     async createItem(input: ItemInput) {
       const parsed = itemInput.parse(input);
       const auth = await client.auth.getUser();
       if (auth.error || !auth.data.user) throw new Error('로그인이 필요합니다.');
-      const item = value(await client.from('rental_items').insert({...parsed, lender_id: auth.data.user.id, currency: 'KRW'}).select().single());
+      const item = value(await client.from('rental_items').insert({...parsed, lender_id: auth.data.user.id, currency: 'KRW'}).select(itemColumns).single());
       if (!item) throw new Error('등록한 물품을 확인하지 못했습니다.');
       return item;
     },

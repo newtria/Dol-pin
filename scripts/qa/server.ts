@@ -25,6 +25,18 @@ Deno.serve({hostname:'127.0.0.1',port:55325},async req=>{
    if(url.pathname==='/__qa/lose-approval'&&req.method==='POST'){pg.loseNextApproval();return Response.json({ok:true});}
    if(url.pathname==='/__qa/lose-cancel'&&req.method==='POST'){pg.loseNextCancel();return Response.json({ok:true});}
    if(url.pathname==='/__qa/recover'&&req.method==='POST')return recovery(new Request('http://127.0.0.1/recovery',{method:'POST',headers:{Authorization:`Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`}}));
+   if(url.pathname==='/__qa/recovery-due'&&req.method==='POST') {
+    const {tag}=await req.json();const f=fixtures.get(tag);if(!f)return new Response('Missing fixture',{status:404});
+    // Only this isolated QA fixture's clock is advanced. The browser itself
+    // must never bypass production retry due times or invoke a payment lookup.
+    await localSql(`UPDATE public.toss_checkouts SET next_attempt_at=now()-interval '1 second' WHERE reservation_id IN (SELECT id FROM public.reservations WHERE item_id='${f.item.id}');`);
+    return recovery(new Request('http://127.0.0.1/recovery',{method:'POST',headers:{Authorization:`Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`}}));
+   }
+   if(url.pathname==='/__qa/review-checkout'&&req.method==='POST') {
+    const {tag}=await req.json();const f=fixtures.get(tag);if(!f)return new Response('Missing fixture',{status:404});
+    await localSql(`UPDATE public.toss_checkouts SET review_required_at=now() WHERE reservation_id IN (SELECT id FROM public.reservations WHERE item_id='${f.item.id}');`);
+    return Response.json({ok:true});
+   }
    if(url.pathname==='/__qa/cleanup'&&req.method==='POST') {
     const {tag}=await req.json();const f=fixtures.get(tag);if(f){await f.cleanup();fixtures.delete(tag);}return Response.json({ok:true});
    }

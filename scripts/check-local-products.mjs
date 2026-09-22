@@ -23,11 +23,20 @@ const bytes = readFileSync('assets/demo/lightstick.png');
 assert.ifError((await lender.client.storage.from('product-photos').upload(filename, bytes, {contentType: 'image/png'})).error);
 assert.ok((await outsider.client.storage.from('product-photos').upload(`${lender.id}/${randomUUID()}.png`, bytes, {contentType: 'image/png'})).error);
 const photo = lender.client.storage.from('product-photos').getPublicUrl(filename).data.publicUrl;
-const item = {lender_id: lender.id, title: '[로컬 데모] 콘서트 응원봉', description: '합성 사진을 사용한 검증용 가상 상품입니다.', category: 'lightstick', photos: [photo], daily_price: 5000, currency: 'KRW', deposit: 30000, pickup_method: 'direct'};
-const created = await lender.client.from('rental_items').insert(item).select().single();
+const item = {lender_id: lender.id, title: '[로컬 데모] 콘서트 응원봉', description: '합성 사진을 사용한 검증용 가상 상품입니다.', category: 'lightstick', photos: [photo], daily_price: 5000, currency: 'KRW', deposit: 30000, pickup_method: 'direct', pickup_area: '공연장 인근', pickup_note: '거래 상대 전용 상세 장소'};
+const created = await lender.client.from('rental_items').insert(item).select('id,pickup_area').single();
 assert.ifError(created.error);
 const anon = createClient(url, env.EXPO_PUBLIC_SUPABASE_ANON_KEY, options);
 assert.ifError((await anon.from('rental_items').select('id').eq('id', created.data.id).single()).error);
+assert.equal(created.data.pickup_area, item.pickup_area);
+for (const reader of [anon, outsider.client, lender.client]) {
+  for (const field of ['pickup_note', 'pickup_location', 'imei', '*']) {
+    assert.ok((await reader.from('rental_items').select(field).eq('id', created.data.id)).error, `${field} must require a private access path`);
+  }
+}
+assert.equal((await lender.client.rpc('own_item_pickup_note', {p_item_id: created.data.id})).data, item.pickup_note);
+assert.ok((await outsider.client.rpc('own_item_pickup_note', {p_item_id: created.data.id})).error);
+assert.ok((await anon.rpc('own_item_pickup_note', {p_item_id: created.data.id})).error);
 const attack = await outsider.client.from('rental_items').update({daily_price: 100}).eq('id', created.data.id).select('id');
 assert.ok(attack.error || attack.data.length === 0);
 assert.ok((await lender.client.from('rental_items').update({bt_verified: true}).eq('id', created.data.id)).error);

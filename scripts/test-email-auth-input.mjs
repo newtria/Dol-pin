@@ -1,7 +1,13 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {emailLoginInput,emailSignupInput} from '../apps/mobile/src/email-auth-input.ts';
+import {emailLoginInput as sharedLogin,emailSignupInput as sharedSignup} from '../packages/contracts/src/email-auth.ts';
 import {errorMessage} from '../apps/mobile/src/error-message.ts';
+
+test('mobile and web consume one email input contract',()=>{
+ assert.equal(emailLoginInput,sharedLogin);
+ assert.equal(emailSignupInput,sharedSignup);
+});
 
 test('signup validates confirmation and strength without altering passwords',()=>{
  const input={email:'  qa@example.com  ',password:'Long password ',confirmation:'Long password '};

@@ -401,6 +401,7 @@ export type Database = {
           photos: string[]
           pickup_location: Json | null
           pickup_method: string
+          pickup_area: string | null
           pickup_note: string | null
           status: string | null
           title: string
@@ -426,6 +427,7 @@ export type Database = {
           photos: string[]
           pickup_location?: Json | null
           pickup_method: string
+          pickup_area?: string | null
           pickup_note?: string | null
           status?: string | null
           title: string
@@ -451,6 +453,7 @@ export type Database = {
           photos?: string[]
           pickup_location?: Json | null
           pickup_method?: string
+          pickup_area?: string | null
           pickup_note?: string | null
           status?: string | null
           title?: string
@@ -1187,6 +1190,14 @@ export type Database = {
       }
     }
     Functions: {
+      own_item_pickup_note: {
+        Args: { p_item_id: string }
+        Returns: string | null
+      }
+      rental_recovery_status: {
+        Args: { p_reservation_id: string }
+        Returns: { state: string; next_retry_at: string | null; reference: string }[]
+      }
       begin_rental_money_operation: {
         Args: { p_actor: string; p_kind: string; p_reservation_id: string }
         Returns: {
@@ -1356,15 +1367,15 @@ export type Database = {
       expire_stale_pending_reservations: { Args: never; Returns: number }
       expire_unpaid_rentals: { Args: never; Returns: number }
       fail_toss_confirmation: {
-        Args: { p_order_id: string }
-        Returns: undefined
+        Args: { p_lease: string; p_order_id: string }
+        Returns: Database["public"]["Enums"]["reservation_status"]
       }
       finish_rental_money_operation: {
         Args: { p_id: string; p_lease: string }
         Returns: undefined
       }
       finish_toss_confirmation: {
-        Args: { p_order_id: string; p_payment_key: string }
+        Args: { p_lease: string; p_order_id: string; p_payment_key: string }
         Returns: undefined
       }
       get_chat_list: {

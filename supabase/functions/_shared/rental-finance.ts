@@ -35,7 +35,18 @@ export async function reconcileCheckout(
     p_lease: lease,
     p_payment_key: paymentKey ?? null,
   });
-  if (!claimed) return { status: "processing" };
+  if (!claimed) {
+    const { data: checkout, error: checkoutError } = await admin.from("toss_checkouts")
+      .select("reservation_id").eq("order_id", orderId).single();
+    if (checkoutError) throw checkoutError;
+    const { data: reservation, error } = await admin.from("reservations")
+      .select("status").eq("id", checkout.reservation_id).single();
+    if (error) throw error;
+    return {
+      status: reservation.status === "accepted" ? "processing" : reservation.status,
+      reservationId: checkout.reservation_id,
+    };
+  }
   try {
     const { data: c, error } = await admin.from("toss_checkouts").select("*")
       .eq("order_id", orderId).single();
@@ -53,8 +64,11 @@ export async function reconcileCheckout(
     }
     if (!p) {
       if (!c.payment_key && Date.now() >= Date.parse(c.expires_at)) {
-        await rpc(admin, "fail_toss_confirmation", { p_order_id: orderId });
-        return { status: "expired", reservationId: c.reservation_id };
+        const status = await rpc<string>(admin, "fail_toss_confirmation", {
+          p_order_id: orderId,
+          p_lease: lease,
+        });
+        return { status, reservationId: c.reservation_id };
       }
       if (c.payment_key && Date.now() > Date.parse(c.expires_at) + 86400000) {
         throw new ApiError("PAYMENT_REVIEW_REQUIRED");
@@ -72,16 +86,19 @@ export async function reconcileCheckout(
     }
     identity(p, c.payment_key ?? p.id, c.amount, orderId);
     if (p.status === "paid" && p.refunded === 0) {
-      await rpc(admin, "begin_toss_confirmation", { p_order_id: orderId });
       await rpc(admin, "finish_toss_confirmation", {
         p_order_id: orderId,
         p_payment_key: p.id,
+        p_lease: lease,
       });
       return { status: "paid", reservationId: c.reservation_id };
     }
     if (p.status === "failed" || p.status === "cancelled") {
-      await rpc(admin, "fail_toss_confirmation", { p_order_id: orderId });
-      return { status: "expired", reservationId: c.reservation_id };
+      const status = await rpc<string>(admin, "fail_toss_confirmation", {
+        p_order_id: orderId,
+        p_lease: lease,
+      });
+      return { status, reservationId: c.reservation_id };
     }
     if (Date.now() > Date.parse(c.expires_at) + 86400000) {
       throw new ApiError("PAYMENT_REVIEW_REQUIRED");
