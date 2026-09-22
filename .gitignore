@@ -26,6 +26,16 @@ dist/
 *.pdf
 dolda_기획서.md
 
+# Local working documents and agent state.
+/docs/
+TODO.md
+review.md
+AGENTS.md
+CLAUDE.md
+.claude/
+.codex/
+.agents/
+
 .next-*/
 .next-qa
 
