@@ -1,0 +1,26 @@
+import {useEffect,useRef,useState} from 'react';
+import {Alert,Text,View} from 'react-native';
+import {usePathname} from 'expo-router';
+import {randomUUID} from 'expo-crypto';
+import {useInfiniteQuery,useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
+import type {ServiceCursor} from '@dolpin/api-client';
+import {formatKoreaTime,formatWon} from '@dolpin/contracts';
+import {api} from './client';
+import {useSession} from './session';
+import {Button,Field,ErrorText,s} from './ui';
+import {DisputeEvidence} from './dispute-evidence';
+export function RentalConversation({id,otherUser,status}:{id:string;otherUser:string;status:string}) {
+ const {session}=useSession();const pathname=usePathname();const active=pathname===`/rentals/${id}`;const queries=useQueryClient();const [text,setText]=useState('');const [reason,setReason]=useState('');const [notice,setNotice]=useState('');const attempt=useRef<{text:string;id:string}|null>(null);
+ const messages=useInfiniteQuery({queryKey:['messages',id,session?.user.id],queryFn:({pageParam})=>api.messages(id,pageParam),initialPageParam:undefined as ServiceCursor|undefined,getNextPageParam:rows=>{const last=rows.at(-1);return rows.length===50&&last?.created_at?{createdAt:last.created_at,id:last.id}:undefined;},enabled:active,refetchInterval:active?10000:false});
+ const disputes=useQuery({queryKey:['disputes',id,session?.user.id,status],queryFn:()=>api.disputes(id),enabled:active&&!!session,refetchInterval:active&&status==='disputed'?10000:false});
+ const resolution=useQuery({queryKey:['dispute-resolution',id,session?.user.id,status],queryFn:()=>api.disputeResolution(id),enabled:active&&!!session&&status==='resolved'});
+ const read=useMutation({mutationFn:()=>api.markMessagesRead(id),meta:{silent:true}});useEffect(()=>{if(active&&messages.dataUpdatedAt)read.mutate();},[active,messages.dataUpdatedAt]);
+ const send=useMutation({mutationFn:()=>{const body=text.trim();if(!attempt.current||attempt.current.text!==body)attempt.current={text:body,id:randomUUID()};return api.sendMessage(id,body,attempt.current.id);},onSuccess:()=>{setText('');attempt.current=null;void queries.invalidateQueries({queryKey:['messages',id]});}});
+ const dispute=useMutation({mutationFn:()=>api.openDispute(id,reason.trim()),onSuccess:()=>{setReason('');setNotice('운영 검토를 요청했습니다.');void queries.invalidateQueries({queryKey:['disputes',id]});void queries.invalidateQueries({queryKey:['rental',id]});}});
+ const block=useMutation({mutationFn:()=>api.blockUser(otherUser,true),onSuccess:()=>setNotice('차단했습니다. 진행 중 거래는 유지됩니다.')});
+ const report=useMutation({mutationFn:()=>api.report({userId:otherUser,reservationId:id,reason:'other',description:reason.trim()}),onSuccess:()=>setNotice('신고를 접수했습니다. 계정의 고객 문의에서 처리 결과를 확인할 수 있습니다.')});
+ return <View style={{gap:16}}><Text style={s.heading}>거래 메시지</Text>{messages.hasNextPage?<Button label="이전 메시지" secondary disabled={messages.isFetchingNextPage} onPress={()=>void messages.fetchNextPage()}/>:null}{messages.data?.pages.flat().slice().reverse().map(m=><View key={m.id} style={s.card}><Text style={s.muted}>{m.sender_id===session?.user.id?'나':'거래 상대'} · {m.created_at?new Date(m.created_at).toLocaleString('ko-KR'):''}</Text><Text style={s.body}>{m.message}</Text></View>)}<Field label="거래 메시지" multiline value={text} maxLength={2000} editable={!send.isPending} onChangeText={setText}/><Button label="보내기" disabled={send.isPending||!text.trim()} onPress={()=>send.mutate()}/>
+ <Text style={s.heading}>거래 문제·문의</Text>
+ {status==='resolved'?<View style={s.card}><Text style={s.heading}>운영 검토 결과</Text>{resolution.data?<><Text style={s.body}>환불액 {formatWon(resolution.data.refund_amount)}</Text><Text style={s.body}>{resolution.data.reason}</Text>{resolution.data.created_at?<Text style={s.muted}>처리일 {formatKoreaTime(resolution.data.created_at)}</Text>:null}<Text style={s.muted}>환불액의 결제 수단 반영 시점은 결제사에 따라 다릅니다. 대여료 지급 상태는 계정의 지급 내역에서 확인해 주세요.</Text></>:<Text style={s.body}>{resolution.isPending?'처리 결과를 불러오고 있습니다.':'처리 결과를 확인하지 못했습니다. 고객 문의에서 거래 번호로 문의해 주세요.'}</Text>}<ErrorText error={resolution.error} onRetry={()=>void resolution.refetch()} retrying={resolution.isFetching}/></View>:null}
+ <Field label="문제 상황 (10자 이상)" multiline value={reason} maxLength={2000} onChangeText={setReason}/>{['paid','picked_up','returned','disputed'].includes(status)?<Button label="운영 검토 요청" disabled={reason.trim().length<10||dispute.isPending} onPress={()=>Alert.alert('운영 검토를 요청할까요?','처리 중에는 물품 인수와 자동 환불을 진행할 수 없습니다.',[{text:'취소',style:'cancel'},{text:'요청',onPress:()=>dispute.mutate()}])}/>:null}<Button label="상대 신고·문의 접수" secondary disabled={reason.trim().length<10||report.isPending} onPress={()=>report.mutate()}/><Button label="상대 차단" secondary disabled={block.isPending} onPress={()=>Alert.alert('상대를 차단할까요?','진행 중 거래는 유지됩니다.',[{text:'취소',style:'cancel'},{text:'차단',onPress:()=>block.mutate()}])}/>{disputes.data?.map(d=><View key={d.id} style={s.card}><Text style={s.heading}>{d.resolved_at?'처리 완료':'검토 중'}</Text><Text style={s.body}>{d.reason}</Text><DisputeEvidence id={id} paths={d.evidence_paths} canUpload={!d.resolved_at&&d.reporter_id===session?.user.id}/></View>)}{notice?<Text style={s.body}>{notice}</Text>:null}<ErrorText error={messages.error??send.error??read.error??dispute.error??disputes.error??block.error??report.error}/></View>;
+}

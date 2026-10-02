@@ -1,4 +1,9 @@
 import {ApiRequestError} from './errors.ts';
+import {createFinanceApi} from './finance.ts';
+import {createServiceApi} from './services.ts';
+import {withProductPhotos} from './photos.ts';
+export type * from './finance.ts';
+export type * from './services.ts';
 export {ApiRequestError} from './errors.ts';
 import {RentalRequestRejected} from './pending-rentals.ts';
 export {createPendingRentals, RentalRequestRejected, type RentalRequest} from './pending-rentals.ts';
@@ -31,6 +36,8 @@ export function createApi(client: Client) {
     return data;
   }
   return {
+    ...createFinanceApi(client),
+    ...createServiceApi(client),
     async preparePayment(reservationId: string, mobile = false): Promise<{checkoutUrl: string}> {
       const {data,error} = await client.functions.invoke('toss-payment', {body: {action:'prepare',reservationId,mobile}});
       if(error || data?.error) {
@@ -82,7 +89,7 @@ export function createApi(client: Client) {
       if (filter.search?.trim()) query = query.ilike('title', `%${filter.search.trim().replace(/[\\%_]/g, '\\$&')}%`);
       if(cursor)query=query.or(`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`);
       const rows=value(await query.limit(51))??[];const last=rows[49];
-      return {rows:rows.slice(0,50),nextCursor:rows.length>50&&last.created_at?{createdAt:last.created_at,id:last.id}:undefined};
+      return {rows:rows.slice(0,50).map(item=>withProductPhotos(client,item)),nextCursor:rows.length>50&&last.created_at?{createdAt:last.created_at,id:last.id}:undefined};
     },
     async recoverPayment(reservationId:string) {
       return invoke('toss-payment',{action:'recover',reservationId});
@@ -97,9 +104,7 @@ export function createApi(client: Client) {
       return invoke('rental-payment',{action,reservationId});
     },
     async pickupRental(reservationId:string) {
-      const result=value(await client.rpc('transition_reservation_status',{p_reservation_id:reservationId,p_target:'picked_up'})) as {ok?:boolean;error?:string};
-      if(!result.ok)throw new Error(result.error??'인수를 확인하지 못했습니다.');
-      return result;
+      return createFinanceApi(client).pickup(reservationId);
     },
     async returnRental(reservationId:string,path:string) {
       return value(await client.rpc('return_rental',{p_reservation_id:reservationId,p_photo_path:path}));
@@ -110,7 +115,8 @@ export function createApi(client: Client) {
       return result.signedUrl;
     },
     async item(id: string) {
-      return value(await client.from('rental_items').select(itemColumns).eq('id', id).single());
+      const result=value(await client.from('rental_items').select(itemColumns).eq('id', id).single());
+      return result?withProductPhotos(client,result):result;
     },
     async ownItemPickupNote(id: string) {
       return value(await client.rpc('own_item_pickup_note', {p_item_id: id}));
@@ -121,7 +127,7 @@ export function createApi(client: Client) {
       if (auth.error || !auth.data.user) throw new Error('로그인이 필요합니다.');
       const item = value(await client.from('rental_items').insert({...parsed, lender_id: auth.data.user.id, currency: 'KRW'}).select(itemColumns).single());
       if (!item) throw new Error('등록한 물품을 확인하지 못했습니다.');
-      return item;
+      return withProductPhotos(client,item);
     },
     async profile(id: string) {
       return value(await client.from('users').select('*').eq('id', id).maybeSingle());

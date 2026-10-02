@@ -1,5 +1,6 @@
-import {useState} from 'react';
-import {Platform, Pressable, Text, View} from 'react-native';
+import {useRef,useState} from 'react';
+import {router} from 'expo-router';
+import {Platform, Pressable, Text, View,Switch,Linking} from 'react-native';
 import {useMutation} from '@tanstack/react-query';
 import {client} from './client';
 import {emailLoginInput, emailSignupInput} from './email-auth-input';
@@ -7,7 +8,7 @@ import {Button, ErrorText, Field, ValidationText, s} from './ui';
 
 const redirectTo = () => Platform.OS === 'web' ? `${window.location.origin}/auth/callback` : 'dolpin://auth/callback';
 
-export function EmailAuth() {
+export function EmailAuth({disabled=false,onBusyChange}:{disabled?:boolean;onBusyChange?:(busy:boolean)=>void}) {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,6 +17,11 @@ export function EmailAuth() {
   const [pendingEmail, setPendingEmail] = useState<string>();
   const [notice, setNotice] = useState('');
   const [resendAfter, setResendAfter] = useState(0);
+  const [consented,setConsented]=useState(false);
+  const terms=process.env.EXPO_PUBLIC_TERMS_URL,privacy=process.env.EXPO_PUBLIC_PRIVACY_URL;
+  const open=useMutation({mutationFn:(url:string)=>Linking.openURL(url)});
+  const submitting=useRef(false);
+  function settled(){submitting.current=false;onBusyChange?.(false);}
   const auth = useMutation({mutationFn: async (input: {email:string; password:string; mode:'login'|'signup'}) => {
     if(input.mode === 'login') {
       const {error} = await client.auth.signInWithPassword({email:input.email,password:input.password});
@@ -34,7 +40,7 @@ export function EmailAuth() {
     setPassword(''); setConfirmation('');
   }, onError: (error,input) => {
     if('code' in error && error.code==='email_not_confirmed') setPendingEmail(input.email);
-  }});
+  },onSettled:settled});
   const resend = useMutation({mutationFn: async () => {
     if(!pendingEmail) return;
     if(Date.now()<resendAfter) {setNotice('확인 메일을 보낸 지 얼마 되지 않았습니다. 잠시 후 다시 시도해 주세요.');return;}
@@ -42,14 +48,15 @@ export function EmailAuth() {
     if(error) throw error;
     setNotice('확인 메일을 다시 보냈습니다. 받은편지함과 스팸함을 확인해 주세요.');
     setResendAfter(Date.now()+60000);
-  }});
-  const busy=auth.isPending||resend.isPending;
+  },onSettled:settled});
+  const busy=disabled||auth.isPending||resend.isPending;
   function submit() {
-    if(busy) return;
+    if(busy||submitting.current) return;
+    if(mode==='signup'&&(!consented||!terms||!privacy)){setNotice('이용약관과 개인정보 안내를 확인하고 동의해 주세요.');return;}
     const input=(mode==='signup'?emailSignupInput:emailLoginInput).safeParse({email,password,confirmation});
     if(!input.success) {setErrors(Object.fromEntries(input.error.issues.map(issue=>[String(issue.path[0]),issue.message])));return;}
     setErrors({});setNotice('');
-    auth.mutate({...input.data,mode});
+    submitting.current=true;onBusyChange?.(true);auth.mutate({...input.data,mode});
   }
   function switchMode() {
     if(busy) return;
@@ -62,10 +69,12 @@ export function EmailAuth() {
     <Field label="비밀번호" placeholder={mode==='signup'?'8자 이상 입력해 주세요':'비밀번호를 입력해 주세요'} value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" autoCorrect={false} autoComplete={mode==='signup'?'new-password':'current-password'} editable={!busy} onSubmitEditing={mode==='login'?submit:undefined}/>
     <ValidationText error={errors.password}/>
     {mode==='signup'?<><Field label="비밀번호 확인" value={confirmation} onChangeText={setConfirmation} secureTextEntry autoCapitalize="none" autoCorrect={false} autoComplete="new-password" editable={!busy} onSubmitEditing={submit}/><ValidationText error={errors.confirmation}/></>:null}
-    <Button label={auth.isPending?'처리 중':mode==='login'?'이메일 로그인':'가입하기'} onPress={submit} disabled={busy}/>
-    <ErrorText error={auth.error??resend.error}/>
+    {mode==='signup'?terms&&privacy?<><Button label="이용약관 보기" secondary onPress={()=>open.mutate(terms)}/><Button label="개인정보 처리 안내 보기" secondary onPress={()=>open.mutate(privacy)}/><Text style={s.body}>확인하고 가입에 동의합니다. 이메일 확인 후 거래 이용 동의를 저장합니다.</Text><Switch accessibilityLabel="가입 안내 동의" value={consented} onValueChange={setConsented}/></>:<Text style={s.body}>가입 안내를 준비하고 있습니다. 잠시 후 다시 시도해 주세요.</Text>:null}
+    <Button label={auth.isPending?'처리 중':mode==='login'?'이메일 로그인':'가입하기'} onPress={submit} disabled={busy||(mode==='signup'&&(!consented||!terms||!privacy))}/>
+    <ErrorText error={auth.error??resend.error??open.error}/>
     {notice?<Text accessibilityRole="alert" style={s.body}>{notice}</Text>:null}
-    {pendingEmail?<Button label="확인 메일 다시 받기" secondary disabled={busy} onPress={()=>resend.mutate()}/>:null}
+    {pendingEmail?<Button label="확인 메일 다시 받기" secondary disabled={busy} onPress={()=>{if(busy||submitting.current)return;submitting.current=true;onBusyChange?.(true);resend.mutate();}}/>:null}
     <Pressable accessibilityRole="button" disabled={busy} onPress={switchMode} style={{paddingVertical:10}}><Text style={[s.body,{textAlign:'center'}]}>{mode==='login'?'처음이신가요? 이메일로 가입하기':'이미 계정이 있나요? 로그인하기'}</Text></Pressable>
+    <Button label="비밀번호를 잊으셨나요?" secondary disabled={busy} onPress={()=>router.push('/auth/password')}/>
   </View>;
 }

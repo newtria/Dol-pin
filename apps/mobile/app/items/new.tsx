@@ -1,17 +1,25 @@
-import {useState} from 'react';
+import {useState,useEffect,useRef} from 'react';
+import {DateField} from '../../src/date-field';
+import {ConcertSelect} from '../../src/concert-select';
 import {Image, ScrollView, Text, View} from 'react-native';
-import {router} from 'expo-router';
+import {router,useLocalSearchParams} from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import {Controller, useForm} from 'react-hook-form';
 import {zodResolver} from '@hookform/resolvers/zod';
-import {useMutation, useQueryClient} from '@tanstack/react-query';
+import {useMutation,useQuery, useQueryClient} from '@tanstack/react-query';
 import {categories, categoryLabels, itemInput, type ItemInput} from '@dolpin/contracts';
 import {api, client} from '../../src/client';
 import {useSession} from '../../src/session';
 import {Button,ValidationText, ErrorText, Field, s} from '../../src/ui';
 
 export default function NewItem() {
+  const {session}=useSession();const {edit}=useLocalSearchParams<{edit?:string}>();
+  return <ItemEditor key={`${session?.user.id??'signed-out'}:${edit??'new'}`}/>;
+}
+function ItemEditor(){
   const {session} = useSession();
+  const {edit}=useLocalSearchParams<{edit?:string}>();const initialized=useRef('');
+  const existing=useQuery({queryKey:['edit-item',edit,session?.user.id],enabled:!!edit&&!!session,queryFn:async()=>{const [item,note]=await Promise.all([api.item(edit!),api.ownItemPickupNote(edit!)]);if(item.lender_id!==session!.user.id)throw new Error('수정 권한이 없습니다.');return {...item,pickup_note:note};}});
   const queries = useQueryClient();
   const [photoError, setPhotoError] = useState<unknown>();
   const [uploading, setUploading] = useState(false);
@@ -21,8 +29,9 @@ export default function NewItem() {
   }});
   const photos = form.watch('photos');
   const category = form.watch('category');
-  const create = useMutation({mutationFn: api.createItem, onSuccess: async item => {
-    await queries.invalidateQueries({queryKey: ['items']}); router.replace(`/items/${item.id}`);
+  useEffect(()=>{const item=existing.data;if(item&&initialized.current!==item.id){form.reset({...item,description:item.description??'',pickup_method:'direct',pickup_area:item.pickup_area??'',pickup_note:item.pickup_note??'',category:item.category as ItemInput['category']});initialized.current=item.id;}},[existing.data,form]);
+  const create = useMutation({mutationFn:(input:ItemInput)=>edit?api.updateItem(edit,input):api.createItem(input), onSuccess: async item => {
+    await Promise.all([queries.invalidateQueries({queryKey:['items']}),queries.invalidateQueries({queryKey:['my-items']}),queries.invalidateQueries({queryKey:['item',item.id]})]); router.replace(`/items/${item.id}`);
   }});
   async function addPhoto() {
     if (!session || photos.length >= 5) return;
@@ -44,12 +53,15 @@ export default function NewItem() {
     } catch (error) {setPhotoError(error);} finally {setUploading(false);}
   }
   if (!session) return <View style={s.content}><Text style={s.heading}>로그인 후 물품을 등록해 주세요.</Text><Button label="로그인" onPress={() => router.push('/account')}/></View>;
+  if(edit&&!existing.data)return <View style={s.content}><Text style={s.body}>물품을 확인하고 있습니다.</Text><ErrorText error={existing.error}/></View>;
   return <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-    <Text style={s.title}>콘서트 물품 등록</Text>
+    <Text style={s.title}>콘서트 물품 {edit?'수정':'등록'}</Text>
     <Text style={s.muted}>상품 사진은 누구나 볼 수 있습니다. 개인정보나 반납 증빙은 올리지 마세요.</Text>
-    <ScrollView horizontal contentContainerStyle={{gap: 12}}>{photos.map(uri => <Image key={uri} source={{uri}} style={{width: 100, height: 100, borderRadius: 12}}/>)}</ScrollView>
+    <ScrollView horizontal contentContainerStyle={{gap: 12}}>{photos.map((uri,index) => <View key={uri} style={{gap:8}}><Image source={{uri}} style={{width: 100, height: 100, borderRadius: 12}}/><Button label={`사진 ${index+1} 제거`} secondary disabled={create.isPending||uploading} onPress={()=>form.setValue('photos',photos.filter(p=>p!==uri),{shouldValidate:true})}/>{index>0?<Button label="앞으로" secondary onPress={()=>{const next=[...photos];[next[index-1],next[index]]=[next[index],next[index-1]];form.setValue('photos',next);}}/>:null}</View>)}</ScrollView>
     <Button label={uploading ? '사진 업로드 중' : `사진 추가 (${photos.length}/5)`} onPress={() => {void addPhoto();}} disabled={uploading || create.isPending || photos.length >= 5} secondary/>
     <ErrorText error={photoError}/><ValidationText error={form.formState.errors.photos?.message}/>
+    <ConcertSelect value={form.watch('concert_id')} onChange={value=>form.setValue('concert_id',value)}/>
+    {(['available_from','available_to'] as const).map(name=><View key={name}><DateField dateOnly clearable label={name==='available_from'?'대여 가능 시작일':'대여 가능 마지막 날'} value={form.watch(name)??''} onChange={value=>form.setValue(name,value||null,{shouldValidate:true})}/><ValidationText error={form.formState.errors[name]?.message}/></View>)}
     <Controller control={form.control} name="title" render={({field}) => <Field label="상품명" value={field.value} onChangeText={field.onChange}/>}/>
     <ValidationText error={form.formState.errors.title?.message}/>
     <Text style={s.muted}>품목</Text><ScrollView horizontal contentContainerStyle={{gap: 8}}>{categories.map(c => <Button key={c} label={categoryLabels[c]} secondary={category !== c} onPress={() => form.setValue('category', c)}/>)}</ScrollView>
@@ -63,7 +75,7 @@ export default function NewItem() {
     <ValidationText error={form.formState.errors.pickup_note?.message}/>
     {(['daily_price', 'deposit'] as const).map(name => <View key={name} style={{gap: 8}}><Controller control={form.control} name={name} render={({field}) => <Field label={name === 'daily_price' ? '하루 대여료 (원)' : '보증금 (원)'} keyboardType="number-pad" value={String(field.value)} onChangeText={v => field.onChange(v === '' ? 0 : Number(v))}/>}/><ValidationText error={form.formState.errors[name]?.message}/></View>)}
     <Text style={s.muted}>직접 인수·반납하는 물품입니다.</Text>
-    <Button label={create.isPending ? '등록 중' : '물품 등록'} disabled={create.isPending || uploading} onPress={form.handleSubmit(value => create.mutate(value))}/>
+    <Button label={create.isPending ? '저장 중' : edit?'수정 저장':'물품 등록'} disabled={create.isPending || uploading} onPress={form.handleSubmit(value => create.mutate(value))}/>
     <ErrorText error={create.error}/>
   </ScrollView>;
 }

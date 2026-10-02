@@ -4,6 +4,7 @@ import {
   isErrorCode,
   publicError,
 } from "./errors.ts";
+import { errorDiagnostics } from "./telemetry.ts";
 
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,10 +14,11 @@ export const corsHeaders = {
   "Access-Control-Expose-Headers": "Retry-After, X-Request-Id",
 };
 
-export function jsonResponse(status: number, body: unknown): Response {
+export function jsonResponse(status: number, body: unknown, cause?: unknown): Response {
   const headers: Record<string, string> = {
     ...corsHeaders,
     "Content-Type": "application/json",
+    "Cache-Control": "no-store",
   };
   if (status >= 400) {
     const original = body && typeof body === "object"
@@ -50,7 +52,10 @@ export function jsonResponse(status: number, body: unknown): Response {
     if (retryAfter) headers["Retry-After"] = String(retryAfter);
     if (status >= 500) {
       console.error(
-        JSON.stringify({ event: "api_error", requestId, code: detail.code }),
+        JSON.stringify({
+          event: "api_error", requestId, code: detail.code,
+          diagnostics: errorDiagnostics(cause),
+        }),
       );
     }
   }
@@ -62,7 +67,7 @@ export function jsonResponse(status: number, body: unknown): Response {
 
 export function errorResponse(error: unknown): Response {
   const detail = publicError(errorCode(error));
-  return jsonResponse(detail.status, { code: detail.code });
+  return jsonResponse(detail.status, { code: detail.code }, error);
 }
 
 export function optionsResponse(): Response {

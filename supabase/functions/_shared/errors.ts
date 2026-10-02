@@ -2,6 +2,7 @@ const definitions = {
   INVALID_REQUEST: [400, "입력 내용을 확인해 주세요.", false],
   AUTH_REQUIRED: [401, "로그인이 필요합니다. 다시 로그인해 주세요.", false],
   FORBIDDEN: [403, "이 작업을 수행할 권한이 없습니다.", false],
+  ACCOUNT_HAS_OPEN_TRADES: [409, "진행 중인 거래와 지급을 마친 뒤 탈퇴해 주세요.", false],
   NOT_FOUND: [404, "요청한 정보를 찾을 수 없습니다.", false],
   METHOD_NOT_ALLOWED: [405, "지원하지 않는 요청입니다.", false],
   STATE_CONFLICT: [
@@ -42,8 +43,9 @@ const definitions = {
 export type ErrorCode = keyof typeof definitions;
 
 export class ApiError extends Error {
-  constructor(public readonly code: ErrorCode) {
-    super(definitions[code][1]);
+  constructor(public readonly code: ErrorCode, cause?: unknown) {
+    super(definitions[code][1], { cause });
+    this.name = "ApiError";
   }
 }
 
@@ -53,6 +55,8 @@ export function publicError(code: ErrorCode) {
 }
 
 export function codeForStatus(status: number): ErrorCode {
+  // Domain-specific 409 codes must be explicitly supplied by their handler.
+  if (status === 409) return "STATE_CONFLICT";
   return (Object.keys(definitions) as ErrorCode[]).find((code) =>
     definitions[code][0] === status
   ) ?? "INTERNAL_ERROR";
@@ -68,6 +72,8 @@ export function errorCode(error: unknown): ErrorCode {
     ? String(error.code)
     : "";
   if (code === "PDR01") return "PAYMENT_REVIEW_REQUIRED";
+  if (code === "P0002") return "NOT_FOUND";
+  if (code === "P4290") return "RATE_LIMITED";
   if (code === "42501") return "FORBIDDEN";
   if (code === "22P02" || code === "22023" || code === "23514") {
     return "INVALID_REQUEST";
@@ -93,6 +99,7 @@ export async function providerCall<T>(run: () => Promise<T>): Promise<T> {
     const code = errorCode(error);
     throw new ApiError(
       code === "REQUEST_TIMEOUT" ? code : "UPSTREAM_UNAVAILABLE",
+      error,
     );
   }
 }

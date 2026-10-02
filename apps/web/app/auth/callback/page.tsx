@@ -14,7 +14,7 @@ export default function Callback() {
     if (!exchanges.has(code)) exchanges.set(code, (async () => {
       const {error} = await client.auth.exchangeCodeForSession(code); if (error) throw error;
     })());
-    void exchanges.get(code)!.then(() => router.replace('/account')).catch(setError);
+    void exchanges.get(code)!.then(() => router.replace(params.get('recovery')==='1'?'/auth/password':'/account')).catch(setError);
   }, [client,router]);
   return <section><h1>로그인 확인</h1><Failure error={error}/>{error ? <Link href="/account">다시 로그인</Link> : <p>로그인을 확인하고 있습니다.</p>}</section>;
 }

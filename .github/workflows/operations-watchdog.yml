@@ -1,0 +1,32 @@
+name: Operations watchdog
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operations-watchdog
+  cancel-in-progress: false
+
+jobs:
+  health:
+    if: github.event_name == 'workflow_dispatch' || vars.DOLPIN_MONITOR_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    # Store read-only monitoring configuration separately from deployment approval.
+    environment: monitoring
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.3'
+      - name: Verify independent worker health and deliver alert
+        run: node scripts/operations-watchdog.mjs
+        env:
+          DOLPIN_OPS_URL: ${{ vars.DOLPIN_OPS_URL }}
+          DOLPIN_OPS_SERVICE_KEY: ${{ secrets.DOLPIN_OPS_SERVICE_KEY }}
+          DOLPIN_WATCHDOG_WEBHOOK_URL: ${{ secrets.DOLPIN_WATCHDOG_WEBHOOK_URL }}

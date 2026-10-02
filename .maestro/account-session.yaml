@@ -1,0 +1,18 @@
+appId: ${APP_ID}
+---
+- launchApp:
+    clearState: true
+- tapOn: "계정"
+- tapOn: "이메일"
+- inputText: ${QA_EMAIL}
+- tapOn: "비밀번호"
+- inputText: ${QA_PASSWORD}
+- hideKeyboard
+- tapOn: "이메일 로그인"
+- assertVisible: "로그아웃"
+- stopApp
+- launchApp
+- tapOn: "계정"
+- assertVisible: "로그아웃"
+- tapOn: "내 물품 관리"
+- assertVisible: "물품 등록"

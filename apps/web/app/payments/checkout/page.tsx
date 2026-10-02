@@ -16,9 +16,14 @@ export default function CheckoutPage(){
  useEffect(()=>{
   let active=true,timer:ReturnType<typeof setTimeout>|undefined;
   const fragment=new URLSearchParams(location.hash.slice(1)),query=new URLSearchParams(location.search);
-  const orderId=fragment.get('orderId')??query.get('orderId')??sessionStorage.getItem('toss-order');
-  const token=fragment.get('token')??sessionStorage.getItem(`toss-${orderId}`);
-  if(fragment.has('token')&&orderId&&token){sessionStorage.setItem(`toss-${orderId}`,token);sessionStorage.setItem('toss-order',orderId);history.replaceState(null,'',location.pathname);}
+  let orderId:string|null,token:string|null;
+  try{
+   orderId=fragment.get('orderId')??query.get('orderId')??sessionStorage.getItem('toss-order');
+   token=fragment.get('token')??sessionStorage.getItem(`toss-${orderId}`);
+   if(fragment.has('token')&&orderId&&token){sessionStorage.setItem(`toss-${orderId}`,token);sessionStorage.setItem('toss-order',orderId);history.replaceState(null,'',location.pathname);}
+  }catch{
+   setPhase('unavailable');setError({code:'CHECKOUT_STORAGE_UNAVAILABLE'});return;
+  }
   async function poll(){
    if(!active)return;
    if(document.visibilityState==='hidden'){timer=setTimeout(poll,5000);return;}

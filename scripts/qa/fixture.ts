@@ -7,7 +7,10 @@ export function localAdmin() {
  if(!/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(url))throw new Error('QA only runs against local Supabase');
  return createClient(url,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
 }
-export function checked<R extends {data:unknown;error:unknown}>(r:R):NonNullable<R['data']> {if(r.error)throw r.error;return r.data as NonNullable<R['data']>;}
+export function checked<R extends {data:unknown;error:unknown}>(r:R,context?:string):NonNullable<R['data']> {
+ if(r.error)throw context?new Error(`${context} failed`,{cause:r.error}):r.error;
+ return r.data as NonNullable<R['data']>;
+}
 export function fakeProvider() {
  const payments=new Map<string,Payment>();const cancelIds:string[]=[];
  let loseApproval=false,loseCancel=false;
@@ -28,11 +31,12 @@ export async function fixture() {
   const client=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_ANON_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
   const {session}=checked(await client.auth.signInWithPassword({email,password}));
   checked(await client.rpc('ensure_profile',{p_nickname:`QA ${role}`}));
+  checked(await client.rpc('record_consent',{p_terms_version:'2026-09-22',p_privacy_version:'2026-09-22'}));
   return {id:created.user.id,client,session:session!};
  }
  const lender=await actor('lender');const borrower=await actor('borrower');const outsider=await actor('outsider');
  const path=`${lender.id}/${tag}.png`;
- checked(await lender.client.storage.from('product-photos').upload(path,png,{contentType:'image/png'}));
+ checked(await lender.client.storage.from('product-photos').upload(path,png,{contentType:'image/png'}),'fixture product-photo upload');
  const photo=lender.client.storage.from('product-photos').getPublicUrl(path).data.publicUrl;
  const item=checked(await lender.client.from('rental_items').insert({lender_id:lender.id,title:`${tag} 응원봉`,description:'수락 당시 설명',pickup_area:'공연장 인근',pickup_note:'공연장 2번 출구',category:'lightstick',photos:[photo],daily_price:5000,deposit:30000,currency:'KRW',pickup_method:'direct'}).select('id,title,photos,updated_at').single());
  async function rental(offset=0) {
@@ -43,16 +47,40 @@ export async function fixture() {
  async function cleanup() {
   const rentals=checked(await admin.from('reservations').select('id').eq('item_id',item.id))??[];
   for(const r of rentals) {
-   const evidence=checked(await admin.storage.from('rental-evidence').list(`${r.id}/${borrower.id}`))??[];
-   if(evidence.length)checked(await admin.storage.from('rental-evidence').remove(evidence.map(f=>`${r.id}/${borrower.id}/${f.name}`)));
+   const evidence=checked(await admin.storage.from('rental-evidence').list(`${r.id}/${borrower.id}`),'cleanup rental-evidence list')??[];
+   if(evidence.length)checked(await admin.storage.from('rental-evidence').remove(evidence.map(f=>`${r.id}/${borrower.id}/${f.name}`)),'cleanup rental-evidence removal');
+   for(const participant of [lender,borrower]) {
+    const disputeEvidence=checked(await admin.storage.from('dispute-evidence').list(`${r.id}/${participant.id}`),'cleanup dispute-evidence list')??[];
+    if(disputeEvidence.length)checked(await admin.storage.from('dispute-evidence').remove(disputeEvidence.map(f=>`${r.id}/${participant.id}/${f.name}`)),'cleanup dispute-evidence removal');
+   }
   }
-  const photos=checked(await admin.storage.from('product-photos').list(lender.id));
-  if(photos.length)checked(await admin.storage.from('product-photos').remove(photos.map(p=>`${lender.id}/${p.name}`)));
+  const photos=checked(await admin.storage.from('product-photos').list(lender.id),'cleanup product-photo list');
+  if(photos.length)checked(await admin.storage.from('product-photos').remove(photos.map(p=>`${lender.id}/${p.name}`)),'cleanup product-photo removal');
   // Event history is intentionally append-only to service_role. Fixture
   // teardown uses local postgres, never expands production table privileges.
   const ids=[lender.id,borrower.id,outsider.id];
   if(ids.some(id=>!/^[0-9a-f-]{36}$/.test(id)))throw new Error('Invalid fixture id');
   const sql=`BEGIN;
+   DELETE FROM public.notifications WHERE user_id IN (${ids.map(id=>`'${id}'`).join(',')});
+   DELETE FROM public.push_tokens WHERE user_id IN (${ids.map(id=>`'${id}'`).join(',')});
+   DELETE FROM public.chat_messages WHERE reservation_id IN (SELECT id FROM public.reservations WHERE lender_id='${lender.id}');
+   DELETE FROM public.chat_rooms WHERE reservation_id IN (SELECT id FROM public.reservations WHERE lender_id='${lender.id}');
+   DELETE FROM public.reports WHERE reporter_id IN (${ids.map(id=>`'${id}'`).join(',')}) OR reported_user_id IN (${ids.map(id=>`'${id}'`).join(',')});
+   DELETE FROM public.user_blocks WHERE blocker_id IN (${ids.map(id=>`'${id}'`).join(',')}) OR blocked_id IN (${ids.map(id=>`'${id}'`).join(',')});
+   DELETE FROM public.policy_consents WHERE user_id IN (${ids.map(id=>`'${id}'`).join(',')});
+   DELETE FROM public.account_closures WHERE user_id IN (${ids.map(id=>`'${id}'`).join(',')});
+   DELETE FROM public.service_audit WHERE actor_id IN (${ids.map(id=>`'${id}'`).join(',')});
+   DELETE FROM public.product_photo_deletions WHERE split_part(path,'/',1) IN (${ids.map(id=>`'${id}'`).join(',')});
+   DELETE FROM public.payout_audit WHERE payout_id IN (SELECT id FROM public.rental_payouts WHERE lender_id='${lender.id}');
+   DELETE FROM public.payout_claim_accounts WHERE payout_id IN (SELECT id FROM public.rental_payouts WHERE lender_id='${lender.id}');
+   DELETE FROM public.rental_payouts WHERE lender_id='${lender.id}';
+   DELETE FROM public.payout_accounts WHERE user_id IN (${ids.map(id=>`'${id}'`).join(',')});
+   DELETE FROM public.rental_pickup_confirmations WHERE reservation_id IN (SELECT id FROM public.reservations WHERE lender_id='${lender.id}');
+   DELETE FROM public.rental_disputes WHERE reservation_id IN (SELECT id FROM public.reservations WHERE lender_id='${lender.id}');
+   DELETE FROM public.reservation_dispute_resolutions WHERE reservation_id IN (SELECT id FROM public.reservations WHERE lender_id='${lender.id}');
+   DELETE FROM public.finance_operator_audit WHERE reservation_id IN (SELECT id FROM public.reservations WHERE lender_id='${lender.id}');
+   DELETE FROM public.legacy_payment_verifications WHERE reservation_id IN (SELECT id FROM public.reservations WHERE lender_id='${lender.id}');
+   DELETE FROM public.rental_operator_reviews WHERE reservation_id IN (SELECT id FROM public.reservations WHERE lender_id='${lender.id}');
    DELETE FROM public.toss_checkout_sessions WHERE order_id IN (SELECT order_id FROM public.toss_checkouts WHERE reservation_id IN (SELECT id FROM public.reservations WHERE lender_id='${lender.id}'));
    DELETE FROM public.toss_checkouts WHERE reservation_id IN (SELECT id FROM public.reservations WHERE lender_id='${lender.id}');
    DELETE FROM public.rental_money_operations WHERE reservation_id IN (SELECT id FROM public.reservations WHERE lender_id='${lender.id}');

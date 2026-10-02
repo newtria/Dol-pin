@@ -12,6 +12,9 @@ VALUES('24000000-0000-4000-8000-000000000001','14000000-0000-4000-8000-000000000
  'private item fixture','lightstick',ARRAY['https://example.invalid/fixture.png'],5000,30000,'KRW',
  'direct','공연장 인근','수락 당시 전용 장소','{"address":"private fixture address"}', 'private-device-id');
 
+INSERT INTO public.policy_consents(user_id,terms_version,privacy_version) SELECT id,'2026-09-22','2026-09-22' FROM public.users WHERE id IN ('14000000-0000-4000-8000-000000000001','14000000-0000-4000-8000-000000000002');
+INSERT INTO storage.objects(bucket_id,name) VALUES('product-photos','14000000-0000-4000-8000-000000000001/fixture.png');
+
 SET LOCAL ROLE anon;
 DO $$
 DECLARE field text; area text;
@@ -82,7 +85,7 @@ BEGIN
  INSERT INTO public.rental_items(lender_id,title,category,photos,daily_price,deposit,currency,
   pickup_method,pickup_area,pickup_note)
  VALUES('14000000-0000-4000-8000-000000000001','owner created fixture','lightstick',
-  ARRAY['https://example.invalid/fixture.png'],5000,30000,'KRW','direct','역 인근','상대방 전용 안내')
+  ARRAY['http://127.0.0.1:55321/storage/v1/object/public/product-photos/14000000-0000-4000-8000-000000000001/fixture.png'],5000,30000,'KRW','direct','역 인근','상대방 전용 안내')
  RETURNING id,pickup_area INTO created_id,public_area;
  IF created_id IS NULL OR public_area IS DISTINCT FROM '역 인근'
   OR public.own_item_pickup_note(created_id) IS DISTINCT FROM '상대방 전용 안내' THEN
@@ -110,8 +113,7 @@ END $$;
 
 SELECT set_config('request.jwt.claim.sub','14000000-0000-4000-8000-000000000001',true);
 SELECT public.respond_to_rental(current_setting('test.private_item_rental_id')::uuid,'accept');
-UPDATE public.rental_items SET pickup_note='수락 이후 수정된 안내'
- WHERE id='24000000-0000-4000-8000-000000000001';
+SELECT public.update_my_item('24000000-0000-4000-8000-000000000001','{"pickup_note":"수락 이후 수정된 안내"}'::jsonb);
 DO $$ BEGIN
  IF public.own_item_pickup_note('24000000-0000-4000-8000-000000000001') IS DISTINCT FROM '수락 이후 수정된 안내' THEN
   RAISE EXCEPTION 'owner private instruction update unavailable';

@@ -1,0 +1,69 @@
+name: Deploy hosted backend
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Protected GitHub environment with separate Supabase credentials
+        required: true
+        type: choice
+        options: [staging, production]
+      commit:
+        description: Exact main commit SHA with a successful CI run
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: backend-deployment-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.3'
+      - name: Require successful CI for this exact main commit
+        run: node scripts/check-release-ci.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DOLPIN_RELEASE_SHA: ${{ inputs.commit }}
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Configure required reviewers and main-only deployment protection on each
+    # environment in GitHub. This workflow never publishes on a push event.
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.3'
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.107.0
+      - name: Apply migrations, deploy every function and configure delivery
+        run: node scripts/deploy-backend.mjs
+        env:
+          DOLPIN_DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+          DOLPIN_STAGING_PROJECT_REF: ${{ vars.DOLPIN_STAGING_PROJECT_REF }}
+          DOLPIN_PRODUCTION_PROJECT_REF: ${{ vars.DOLPIN_PRODUCTION_PROJECT_REF }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TOSS_SECRET_KEY: ${{ secrets.TOSS_SECRET_KEY }}
+          DOLPIN_WEB_URL: ${{ vars.DOLPIN_WEB_URL }}
+          SERVICE_DELIVERY_TOKEN: ${{ secrets.SERVICE_DELIVERY_TOKEN }}
+          OPS_ALERT_WEBHOOK_URL: ${{ secrets.OPS_ALERT_WEBHOOK_URL }}
+          EXPO_ACCESS_TOKEN: ${{ secrets.EXPO_ACCESS_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}

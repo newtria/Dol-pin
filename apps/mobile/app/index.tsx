@@ -26,6 +26,7 @@ export default function Explore() {
         {categories.map(c => <Chip key={c} label={categoryLabels[c]} selected={filter.category === c} onPress={() => filter.set({category: c})}/>)}</ScrollView>
       <ErrorText error={items.error ?? concerts.error} retrying={items.isFetching || concerts.isFetching} onRetry={()=>{void items.refetch();void concerts.refetch();}}/>
       <Button label="내 거래" secondary onPress={()=>router.push('/rentals')}/>
+      <Button label="메시지·알림" secondary onPress={()=>router.push('/notifications')}/>
       <Button label="내 물품 등록" secondary onPress={() => router.push('/items/new')}/>
     </View>}
     ListFooterComponent={items.hasNextPage?<Button label="물품 더 보기" disabled={items.isFetching} onPress={()=>{void items.fetchNextPage();}}/>:null}

@@ -13,6 +13,7 @@ test('email signup validates input and explains confirmation without removing ot
   await expect(page.getByRole('button', {name: '카카오 로그인'})).toBeVisible();
   await expect(page.getByRole('button', {name: '전화번호로 로그인', exact: true})).toBeVisible();
   await page.getByRole('button', {name: '처음이신가요? 이메일로 가입하기'}).click();
+  await page.getByRole('checkbox').check();
   await page.getByLabel('이메일', {exact: true}).fill('qa@example.test');
   await page.getByLabel('비밀번호', {exact: true}).fill('Long password ');
   await page.getByLabel('비밀번호 확인', {exact: true}).fill('mismatch');

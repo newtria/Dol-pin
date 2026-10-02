@@ -24,7 +24,7 @@ port = 55324
 [auth]
 enabled = true
 site_url = "http://127.0.0.1:3000"
-additional_redirect_urls = ["http://127.0.0.1:3000/auth/callback", "http://localhost:3000/auth/callback", "dolpin://auth/callback"]
+additional_redirect_urls = ["http://127.0.0.1:3000/auth/callback", "http://localhost:3000/auth/callback", "dolpin://auth/callback", "http://127.0.0.1:3000/auth/callback?recovery=1", "http://localhost:3000/auth/callback?recovery=1", "dolpin://auth/callback?recovery=1"]
 
 [auth.email]
 enable_signup = true
@@ -78,3 +78,15 @@ verify_jwt = false # Exact service-role bearer required; never a user JWT.
 
 [functions.gemini-analyze]
 verify_jwt = false # Handler verifies the JWT before reserving account quota.
+
+[functions.finance-ops]
+verify_jwt = false # Handler verifies JWT and trusted app_metadata operator role.
+
+[functions.service-ops]
+verify_jwt = false
+
+[functions.account-lifecycle]
+verify_jwt = false
+
+[functions.service-delivery]
+verify_jwt = false # Dedicated SERVICE_DELIVERY_TOKEN bearer required by handler.

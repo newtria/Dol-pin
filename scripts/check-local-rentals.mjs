@@ -16,13 +16,17 @@ async function actor(phone) {
   const login = await client.auth.verifyOtp({phone, token:'123456', type:'sms'});
   assert.ifError(login.error);
   assert.ifError((await client.rpc('ensure_profile',{p_nickname:'거래 검증'})).error);
+  assert.ifError((await client.rpc('record_consent',{p_terms_version:'2026-09-22',p_privacy_version:'2026-09-22'})).error);
   return {client, id:login.data.user.id};
 }
 const lender = await actor('+821055501001');
 const borrower = await actor('+821055501002');
 const outsider = await actor('+821055501003');
+const path=`${lender.id}/${randomUUID()}.png`;
+assert.ifError((await lender.client.storage.from('product-photos').upload(path,readFileSync('assets/demo/lightstick.png'),{contentType:'image/png'})).error);
+const photo=lender.client.storage.from('product-photos').getPublicUrl(path).data.publicUrl;
 const created = await lender.client.from('rental_items').insert({lender_id:lender.id,
- title:'[검증] 예약 경합 응원봉', category:'lightstick', photos:['https://example.invalid/fixture.png'],
+ title:'[검증] 예약 경합 응원봉', category:'lightstick', photos:[photo],
  daily_price:5000, deposit:30000, currency:'KRW', pickup_method:'direct'}).select('id,updated_at').single();
 assert.ifError(created.error);
 const item=created.data;
@@ -47,7 +51,7 @@ assert.equal(winner.terms_snapshot.total,35000);
 assert.equal((await lender.client.rpc('respond_to_rental',{p_reservation_id:winner.id,p_action:'accept'})).data.id,winner.id);
 const before=await lender.client.from('rental_events').select('id').eq('reservation_id',winner.id);
 assert.equal(before.data.length,2);
-assert.ifError((await lender.client.from('rental_items').update({daily_price:9000}).eq('id',item.id)).error);
+assert.ifError((await lender.client.rpc('update_my_item',{p_item_id:item.id,p_input:{daily_price:9000}})).error);
 const stored=await lender.client.from('reservations').select('*').eq('id',winner.id).single();
 assert.equal(stored.data.terms_snapshot.daily_price,5000); assert.equal(stored.data.total_paid,35000);
 const loser=winner.id===first.data.id?second.data:first.data;

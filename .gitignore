@@ -41,3 +41,9 @@ CLAUDE.md
 
 # Expo-generated native preview project; archived Flutter sources are in legacy/flutter.
 /apps/mobile/ios/
+/apps/mobile/android/
+google-services.json
+GoogleService-Info.plist
+*.p8
+*.p12
+*.mobileprovision

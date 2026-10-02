@@ -38,9 +38,12 @@ Deno.test('real DB: lost approvals, multiple windows, stale refund lock, private
   const r2=await f.rental(1);ids.push(r2.id);const prepared=await call(checkout,{action:'prepare',reservationId:r2.id},b);
   const p2=new URLSearchParams(new URL(prepared.data.checkoutUrl).hash.slice(1));
   assert((await call(checkout,{action:'confirm',orderId:p2.get('orderId'),token:p2.get('token'),paymentKey:'qa-'+r2.id,amount:r2.total_paid})).data.status==='paid','second approval failed');
-  assert(checked(await f.lender.client.rpc('transition_reservation_status',{p_reservation_id:r2.id,p_target:'picked_up'})).ok,'pickup failed');
+  assert((await f.lender.client.rpc('transition_reservation_status',{p_reservation_id:r2.id,p_target:'picked_up'})).error,'legacy single-party pickup allowed');
+  assert(checked(await f.lender.client.rpc('confirm_rental_pickup',{p_reservation_id:r2.id})).status==='paid','single-party pickup changed custody');
+  assert((await call(money,{action:'refund',reservationId:r2.id},b)).code===409,'handover confirmation could be bypassed by refund');
+  assert(checked(await f.borrower.client.rpc('confirm_rental_pickup',{p_reservation_id:r2.id})).status==='picked_up','mutual pickup failed');
   const photoPath=`${r2.id}/${f.borrower.id}/return.png`;
-  checked(await f.borrower.client.storage.from('rental-evidence').upload(photoPath,png,{contentType:'image/png'}));
+  checked(await f.borrower.client.storage.from('rental-evidence').upload(photoPath,png,{contentType:'image/png'}),'private return evidence upload');
   assert((await f.outsider.client.storage.from('rental-evidence').createSignedUrl(photoPath,60)).error,'outsider accessed evidence');
   checked(await f.borrower.client.rpc('return_rental',{p_reservation_id:r2.id,p_photo_path:photoPath}));
   assert((await call(money,{action:'settle',reservationId:r2.id},l)).data.status==='settled','deposit not settled');

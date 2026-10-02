@@ -62,7 +62,11 @@ test('request → accept → pay → pickup → private return → deposit refun
   const errors=[health(b.page),health(l.page)];const path=await requestRental(b.page,f.item.id);await accept(l.page,b.page,path);
   await paymentReturn(b.page);await expect(b.page.getByRole('heading',{name:'결제 완료',exact:true})).toBeVisible();
   await b.page.getByRole('link',{name:'거래로 돌아가기'}).click();
+  l.page.once('dialog',dialog=>dialog.accept());
   await expect(l.page.getByRole('button',{name:'물품을 전달했어요'})).toBeVisible();await l.page.getByRole('button',{name:'물품을 전달했어요'}).click();
+  await expect(b.page.getByText('결제 완료',{exact:true})).toBeVisible();
+  b.page.once('dialog',dialog=>dialog.accept());
+  await b.page.getByRole('button',{name:'물품을 받았어요'}).click();
   await expect(b.page.getByLabel('반납 사진 선택')).toBeVisible();
   await b.page.getByLabel('반납 사진 선택').setInputFiles({name:'return.png',mimeType:'image/png',buffer:png});
   await expect(b.page.getByAltText('제출할 반납 사진')).toBeVisible();

@@ -4,6 +4,7 @@ import {fixture,localAdmin,fakeProvider,checked,localSql} from './fixture.ts';
 import {createHandler as checkoutHandler} from '../../supabase/functions/toss-payment/index.ts';
 import {createHandler as moneyHandler} from '../../supabase/functions/rental-payment/index.ts';
 import {createHandler as recoveryHandler} from '../../supabase/functions/rental-recovery/index.ts';
+import {createHandler as financeHandler} from '../../supabase/functions/finance-ops/index.ts';
 localAdmin();
 const pg=fakeProvider();const checkout=checkoutHandler(pg.factory),money=moneyHandler(pg.factory),recovery=recoveryHandler(pg.factory,async()=>{
  const items=[...fixtures.values()].map(f=>f.item.id);
@@ -11,6 +12,12 @@ const pg=fakeProvider();const checkout=checkoutHandler(pg.factory),money=moneyHa
  return checked(await localAdmin().from('reservations').select('id').in('item_id',items)).map(r=>r.id);
 });
 const fixtures=new Map<string,Awaited<ReturnType<typeof fixture>>>();
+const finance=financeHandler(pg.factory);
+async function commercialCall(handler:(req:Request)=>Promise<Response>,token:string,body:Record<string,unknown>){
+ const response=await handler(new Request('http://127.0.0.1/qa-commercial',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body)}));
+ if(!response.ok)throw new Error(`Commercial fixture request failed (${response.status})`);
+ return response.json();
+}
 Deno.serve({hostname:'127.0.0.1',port:55325},async req=>{
  const url=new URL(req.url);
  try {
@@ -21,6 +28,34 @@ Deno.serve({hostname:'127.0.0.1',port:55325},async req=>{
    if(url.pathname==='/__qa/seed'&&req.method==='POST') {
     const f=await fixture();fixtures.set(f.tag,f);
     return Response.json({tag:f.tag,item:f.item,lender:f.lender.session,borrower:f.borrower.session,outsider:f.outsider.session});
+   }
+   if(url.pathname==='/__qa/profile-preferences'&&req.method==='POST'){
+    const {tag,initialize}=await req.json();const f=fixtures.get(tag);if(!f)return new Response('Missing fixture',{status:404});
+    if(initialize===true)checked(await f.borrower.client.rpc('update_my_profile',{p_nickname:'QA borrower',p_region:'서울',p_update_region:true,p_locale:'ja'}));
+    return Response.json(checked(await f.borrower.client.from('users').select('nickname,region,locale').eq('id',f.borrower.id).single()));
+   }
+   if(url.pathname==='/__qa/answer-support'&&req.method==='POST'){
+    const {tag}=await req.json();const f=fixtures.get(tag);if(!f)return new Response('Missing fixture',{status:404});
+    const report=checked(await f.admin.from('reports').select('id').eq('reporter_id',f.borrower.id).eq('status','pending').is('reservation_id',null).single());
+    checked(await f.admin.auth.admin.updateUserById(f.outsider.id,{app_metadata:{dolpin_operator:true}}));
+    const answer='기기 설정에서 거래 알림 권한을 확인해 주세요. 계정의 알림 메뉴에서 다시 등록할 수 있습니다.';
+    checked(await f.admin.rpc('moderate_service',{p_actor:f.outsider.id,p_action:'resolved',p_target:report.id,p_reason:answer}));
+    return Response.json({answer});
+   }
+   if(url.pathname==='/__qa/resolved-rental'&&req.method==='POST'){
+    const {tag}=await req.json();const f=fixtures.get(tag);if(!f)return new Response('Missing fixture',{status:404});
+    const rental=await f.rental();
+    const prepared=await commercialCall(checkout,f.borrower.session.access_token,{action:'prepare',reservationId:rental.id});
+    const params=new URLSearchParams(new URL(prepared.checkoutUrl).hash.slice(1));
+    const paid=await commercialCall(checkout,f.borrower.session.access_token,{action:'confirm',orderId:params.get('orderId'),token:params.get('token'),paymentKey:`qa-${rental.id}`,amount:rental.total_paid});
+    if(paid.status!=='paid')throw new Error('Commercial fixture payment incomplete');
+    checked(await f.borrower.client.rpc('open_rental_dispute',{p_reservation_id:rental.id,p_reason:'물품 전달이 늦어 일부 이용 기간에 대한 환불을 요청합니다.',p_evidence_paths:[]}));
+    checked(await f.admin.auth.admin.updateUserById(f.outsider.id,{app_metadata:{dolpin_operator:true}}));
+    const refundAmount=32000,reason='양측 메시지와 인수 지연 시간을 대조하여 부분 환불을 결정했습니다.';
+    await commercialCall(finance,f.outsider.session.access_token,{action:'resolveDispute',reservationId:rental.id,refundAmount,reason});
+    const resolved=checked(await f.borrower.client.from('reservations').select('status').eq('id',rental.id).single());
+    if(resolved.status!=='resolved')throw new Error('Commercial fixture dispute incomplete');
+    return Response.json({reservationId:rental.id,refundAmount,reason});
    }
    if(url.pathname==='/__qa/lose-approval'&&req.method==='POST'){pg.loseNextApproval();return Response.json({ok:true});}
    if(url.pathname==='/__qa/lose-cancel'&&req.method==='POST'){pg.loseNextCancel();return Response.json({ok:true});}

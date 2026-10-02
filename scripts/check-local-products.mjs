@@ -14,6 +14,7 @@ async function actor(phone, nickname) {
   const login = await client.auth.verifyOtp({phone, token: '123456', type: 'sms'});
   assert.ifError(login.error);
   assert.ifError((await client.rpc('ensure_profile', {p_nickname: nickname})).error);
+  assert.ifError((await client.rpc('record_consent',{p_terms_version:'2026-09-22',p_privacy_version:'2026-09-22'})).error);
   return {client, id: login.data.user.id};
 }
 const lender = await actor('+821055501001', '대여자 테스트');
@@ -41,7 +42,7 @@ const attack = await outsider.client.from('rental_items').update({daily_price: 1
 assert.ok(attack.error || attack.data.length === 0);
 assert.ok((await lender.client.from('rental_items').update({bt_verified: true}).eq('id', created.data.id)).error);
 assert.ok((await lender.client.from('rental_items').insert({...item, daily_price: -1})).error);
-assert.ifError((await lender.client.from('rental_items').update({description: item.description + ' 소유자 수정 검증.'}).eq('id', created.data.id)).error);
+assert.ifError((await lender.client.rpc('update_my_item',{p_item_id:created.data.id,p_input:{description:item.description+' 소유자 수정 검증.'}})).error);
 await Promise.all([lender.client.auth.signOut(), outsider.client.auth.signOut()]);
 console.log('Product upload/create/public read/owner edit passed; foreign upload/edit, trust flag, invalid price rejected.');
 console.log(`Local demo item: ${created.data.id}`);

@@ -23,9 +23,17 @@ export async function requireAuthenticatedUser(
   }
 
   const callerClient = createClient(supabaseUrl, serviceRoleKey, {
-    global: { headers: { Authorization: `Bearer ${jwt}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      headers: { Authorization: `Bearer ${jwt}` },
+      fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(10_000) }),
+    },
   });
   const { data, error } = await callerClient.auth.getUser(jwt);
+  // An unavailable Auth service does not mean the customer's login expired.
+  if (error && (!error.status || error.status >= 500 || error.status === 429)) {
+    return jsonResponse(503, { code: "SERVICE_UNAVAILABLE" }, error);
+  }
   if (error || !data?.user) {
     return jsonResponse(401, { error: "Invalid token" });
   }

@@ -2,6 +2,7 @@ import {Pressable, StyleSheet, Text, TextInput, View, type TextInputProps, type 
 import {SafeAreaView} from 'react-native-safe-area-context';
 import type {ReactNode} from 'react';
 import {errorMessage} from './error-message';
+import {errorRequestId} from '@dolpin/api-client/errors';
 export const colors = {background: '#0D0D0D', surface: '#1A1A2E', primary: '#6C5CE7', text: '#F5F5F5', muted: '#B0B0C3', border: '#2D2D44', error: '#E17055'};
 export const s = StyleSheet.create({
   page: {flex: 1, backgroundColor: colors.background}, content: {padding: 20, gap: 20},
@@ -19,7 +20,8 @@ export function Button({label, onPress, disabled, secondary}: {label: string; on
   </Pressable>;
 }
 export function ErrorText({error, onRetry, retrying}: {error: unknown; onRetry?: () => void; retrying?: boolean}) {
-  return error ? <View style={{gap: 12}}><Text accessibilityRole="alert" style={{color: colors.error, lineHeight: 22}}>{errorMessage(error)}</Text>{onRetry ? <Button label={retrying ? '다시 불러오는 중' : '다시 시도'} disabled={retrying} secondary onPress={onRetry}/> : null}</View> : null;
+  const requestId=errorRequestId(error);
+  return error ? <View style={{gap: 12}}><Text accessibilityRole="alert" style={{color: colors.error, lineHeight: 22}}>{errorMessage(error)}</Text>{requestId?<Text selectable style={s.muted}>문의 코드: {requestId}</Text>:null}{onRetry ? <Button label={retrying ? '다시 불러오는 중' : '다시 시도'} disabled={retrying} secondary onPress={onRetry}/> : null}</View> : null;
 }
 /** Validation copy is authored locally by the form schema, never by an API. */
 export function ValidationText({error}: {error?: string}) {return error ? <Text accessibilityRole="alert" style={{color: colors.error, lineHeight: 22}}>{error}</Text> : null;}

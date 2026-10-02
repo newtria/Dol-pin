@@ -62,8 +62,19 @@ SELECT set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001
 DO $$
 DECLARE result jsonb;
 BEGIN
- result := public.transition_reservation_status(current_setting('test.reservation_id')::uuid, 'picked_up');
- IF result->>'ok' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'paid lender pickup failed: %', result; END IF;
+ BEGIN
+  PERFORM public.transition_reservation_status(current_setting('test.reservation_id')::uuid, 'picked_up');
+  RAISE EXCEPTION 'legacy single-party pickup succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='legacy single-party pickup succeeded' THEN RAISE; END IF;
+ END;
+ result := public.confirm_rental_pickup(current_setting('test.reservation_id')::uuid);
+ IF result->>'status' IS DISTINCT FROM 'paid' THEN RAISE EXCEPTION 'single-party confirmation changed custody'; END IF;
+END $$;
+SELECT set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000002', true);
+DO $$ DECLARE result jsonb; BEGIN
+ result:=public.confirm_rental_pickup(current_setting('test.reservation_id')::uuid);
+ IF result->>'status' IS DISTINCT FROM 'picked_up' THEN RAISE EXCEPTION 'mutual pickup did not advance custody'; END IF;
 END $$;
 ROLLBACK;
 SELECT 'legacy authority baseline passed' AS result;

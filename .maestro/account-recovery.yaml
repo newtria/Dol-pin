@@ -1,0 +1,11 @@
+appId: ${APP_ID}
+---
+- launchApp:
+    clearState: true
+- tapOn: "계정"
+- tapOn: "비밀번호를 잊으셨나요?"
+- assertVisible: "재설정 메일 보내기"
+- tapOn: "계정으로 돌아가기"
+- assertVisible: "이메일로 로그인"
+- tapOn: "처음이신가요? 이메일로 가입하기"
+- assertVisible: "비밀번호 확인"

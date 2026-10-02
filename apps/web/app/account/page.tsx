@@ -1,6 +1,7 @@
 'use client';
 import {SocialButtons} from '@/components/social-buttons';
 import {EmailAuth} from '@/components/email-auth';
+import {AccountSettings} from '@/components/account-settings';
 import {useState} from 'react';
 import {useForm} from 'react-hook-form';
 import {zodResolver} from '@hookform/resolvers/zod';
@@ -41,5 +42,6 @@ export default function Account() {
       <Failure error={send.error ?? verify.error}/>
       </> : null}
     </>}
+    {session&&profile.data?<AccountSettings key={session.user.id}/>:null}
   </section>;
 }

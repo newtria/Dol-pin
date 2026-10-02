@@ -1,0 +1,8 @@
+{
+  "cli": {"appVersionSource": "remote"},
+  "build": {
+    "preview": {"environment": "preview", "distribution": "internal", "ios": {"simulator": true}},
+    "production": {"environment": "production", "distribution": "store", "autoIncrement": true, "env": {"DOLPIN_RELEASE": "1"}}
+  },
+  "submit": {"production": {}}
+}

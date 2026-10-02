@@ -18,8 +18,33 @@ export async function rpc<T = unknown>(
 function identity(p: Payment, id: string, total: number, orderId?: string) {
   if (
     p.id !== id || p.total !== total || p.currency !== "KRW" ||
-    (orderId && p.orderId !== orderId)
+    (orderId && p.orderId !== orderId) ||
+    !Number.isSafeInteger(p.refunded) || p.refunded < 0 || p.refunded > p.total
   ) {
+    throw new ApiError("PAYMENT_REVIEW_REQUIRED");
+  }
+}
+
+// A capture may be cancelled externally between settlement and manual payout.
+// Recheck before releasing fresh bank instructions; an existing bank claim is
+// kept recoverable because a transfer may already have happened.
+export async function verifyPendingPayout(
+  admin: SupabaseClient,
+  payoutId: string,
+  providers: ProviderFactory = paymentProvider,
+) {
+  const { data: payout, error: payoutError } = await admin.from("rental_payouts")
+    .select("reservation_id,status,amount").eq("id", payoutId).single();
+  if (payoutError) throw payoutError;
+  if (payout.status !== "pending") return;
+  const { data: rental, error } = await admin.from("reservations")
+    .select("id,status,payment_id,payment_provider,total_paid").eq("id", payout.reservation_id).single();
+  if (error) throw error;
+  if (!["settled", "resolved"].includes(rental.status) || !rental.payment_id) throw new ApiError("PAYMENT_REVIEW_REQUIRED");
+  const payment = await providerCall(() => providers(rental.payment_provider).lookup(rental.payment_id));
+  identity(payment, rental.payment_id, rental.total_paid,
+    rental.payment_provider === "toss" ? `dolpin_${rental.id.replaceAll("-", "")}` : rental.id);
+  if (payment.status !== "paid" || payment.refunded !== rental.total_paid - payout.amount) {
     throw new ApiError("PAYMENT_REVIEW_REQUIRED");
   }
 }
@@ -138,7 +163,7 @@ type Operation = {
   payment_id: string;
   amount: number;
   total: number;
-  kind: "refund" | "settle";
+  kind: "refund" | "settle" | "dispute";
   dispatched_at: string | null;
 };
 export async function reconcileMoney(
@@ -154,13 +179,21 @@ export async function reconcileMoney(
   );
   if (!op?.id) return { status: "processing" };
   try {
-    if (op.amount > 0) {
+    // A zero refund must also verify that the capture was not refunded outside
+    // this operation before any money is released to the lender.
+    {
       const provider = providers(op.provider);
       let p = await providerCall(() => provider.lookup(op.payment_id));
       const orderId = op.provider === "toss"
         ? `dolpin_${op.reservation_id.replaceAll("-", "")}`
         : op.reservation_id;
       identity(p, op.payment_id, op.total, orderId);
+      if (op.amount === 0 && (p.status !== "paid" || p.refunded !== 0)) {
+        throw new ApiError("PAYMENT_REVIEW_REQUIRED");
+      }
+      if (p.refunded === op.amount && !["paid", "cancelled"].includes(p.status)) {
+        throw new ApiError("PAYMENT_REVIEW_REQUIRED");
+      }
       if (p.refunded !== op.amount) {
         if (p.refunded !== 0 || p.status !== "paid") {
           throw new ApiError("PAYMENT_REVIEW_REQUIRED");
@@ -184,7 +217,7 @@ export async function reconcileMoney(
           provider.cancel(op.payment_id, op.amount, op.total, op.id)
         );
         identity(p, op.payment_id, op.total, orderId);
-        if (p.refunded !== op.amount) {
+        if (p.refunded !== op.amount || !["paid", "cancelled"].includes(p.status)) {
           throw new ApiError("PAYMENT_REVIEW_REQUIRED");
         }
       }
@@ -194,7 +227,7 @@ export async function reconcileMoney(
       p_lease: lease,
     });
     return {
-      status: op.kind === "refund" ? "cancelled" : "settled",
+      status: op.kind === "refund" ? "cancelled" : op.kind === "dispute" ? "resolved" : "settled",
       reservationId: op.reservation_id,
     };
   } catch (error) {

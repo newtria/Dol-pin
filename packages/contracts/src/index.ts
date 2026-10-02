@@ -16,7 +16,9 @@ export const itemInput = z.object({
   pickup_method: z.literal('direct'),
   pickup_area: z.string().trim().min(2, '공개할 만남 지역을 입력해 주세요').max(100),
   pickup_note: z.string().trim().min(2, '거래 상대에게 안내할 상세 장소를 입력해 주세요').max(300),
-});
+  available_from: z.iso.date().nullable().optional(),
+  available_to: z.iso.date().nullable().optional(),
+}).refine(value=>!value.available_from||!value.available_to||value.available_to>=value.available_from,{path:['available_to'],message:'대여 종료일은 시작일 이후여야 합니다.'});
 export type ItemInput = z.infer<typeof itemInput>;
 export const phoneInput = z.object({phone: z.string().regex(/^\+82\d{9,10}$/, '+82로 시작하는 전화번호를 입력해 주세요')});
 export const profileInput = z.object({nickname: z.string().trim().min(2).max(30)});
@@ -70,7 +72,7 @@ export function rentalGuidance(r:{status:string|null;payment_action:string|null;
  switch(r.status) {
   case 'requested':return lender?{title:'예약 요청을 확인해 주세요',body:'대여 기간과 금액을 확인한 뒤 수락하거나 거절해 주세요.'}:{title:'빌려주는 분의 수락을 기다리고 있어요',body:'수락하면 결제할 수 있습니다. 아직 물품이 확보된 상태는 아닙니다.'};
   case 'accepted':return r.payment_attempt_merchant_uid?{title:'결제 결과를 확인하고 있어요',body:'중복 결제하지 마세요. 거래 상세에서 처리 상태를 이어서 확인할 수 있습니다.'}:lender?{title:'빌리는 분의 결제를 기다리고 있어요',body:'결제 완료를 확인한 뒤 약속한 장소에서 물품을 전달해 주세요.'}:{title:'결제하면 예약이 확정돼요',body:'아래 기한 안에 대여료와 보증금을 결제해 주세요.'};
-  case 'paid':return lender?{title:'약속한 장소에서 물품을 전달해 주세요',body:'빌리는 분에게 실제로 건넨 뒤 아래 버튼으로 전달을 확인해 주세요.'}:{title:'약속한 장소에서 물품을 받아 주세요',body:'빌려주는 분이 전달을 확인하면 사용 중으로 바뀝니다.'};
+  case 'paid':return lender?{title:'약속한 장소에서 물품을 전달해 주세요',body:'실제로 건넨 뒤 전달을 확인해 주세요. 양쪽이 확인하면 사용 중으로 바뀝니다.'}:{title:'약속한 장소에서 물품을 받아 주세요',body:'실제로 받은 뒤 인수를 확인해 주세요. 양쪽이 확인하면 사용 중으로 바뀝니다.'};
   case 'picked_up':return lender?{title:'빌리는 분이 물품을 사용 중이에요',body:'반납 사진이 제출되면 물품 상태를 확인해 주세요.'}:{title:'사용 후 물품을 반납해 주세요',body:'약속한 장소에 실제로 반납한 뒤 사진을 선택하고 반납 제출을 눌러 주세요.'};
   case 'returned':return lender?{title:'반납된 물품을 확인해 주세요',body:'사진과 실제 물품 상태를 확인한 뒤 수령을 확정하면 보증금이 반환됩니다.'}:{title:'빌려주는 분의 반납 확인을 기다리고 있어요',body:'수령 확인 후 보증금 반환을 진행합니다. 카드사 반영에는 시간이 걸릴 수 있습니다.'};
   case 'settled':return {title:'반납과 보증금 반환이 처리됐어요',body:'카드사 반영 시점에 따라 환불 내역이 늦게 표시될 수 있습니다.'};
@@ -78,6 +80,7 @@ export function rentalGuidance(r:{status:string|null;payment_action:string|null;
   case 'cancelled':return {title:'거래가 취소됐어요',body:'결제한 거래의 환불 내역은 카드사 반영 후 확인할 수 있습니다.'};
   case 'rejected':return {title:'이번 예약은 수락되지 않았어요',body:'다른 기간이나 물품으로 예약을 요청해 주세요.'};
   case 'disputed':return {title:'거래 문제를 확인하고 있어요',body:'처리 결과가 확정될 때까지 거래 증빙을 보관해 주세요.'};
+  case 'resolved':return {title:'거래 문제 처리가 끝났어요',body:'아래에서 판정 근거와 반환 금액을 확인해 주세요. 카드사 반영 시점에 따라 환불 내역이 늦게 표시될 수 있습니다.'};
   default:return {title:'거래 상태를 확인해 주세요',body:'아래 거래 내역에서 현재 상태와 조건을 확인할 수 있습니다.'};
  }
 }

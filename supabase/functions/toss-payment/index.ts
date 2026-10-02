@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAuthenticatedUser } from "../_shared/auth.ts";
+import { ApiError } from "../_shared/errors.ts";
 import {
   errorResponse,
   jsonResponse,
@@ -30,10 +31,11 @@ export function createHandler(providers: ProviderFactory = paymentProvider) {
     if (!body || typeof body !== "object") {
       return jsonResponse(400, { error: "잘못된 결제 요청입니다." });
     }
-    const url = Deno.env.get("SUPABASE_URL")!;
-    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const admin = createClient(url, key);
     try {
+      const url = Deno.env.get("SUPABASE_URL");
+      const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (!url || !key) throw new ApiError("SERVICE_UNAVAILABLE");
+      const admin = createClient(url, key);
       if (body.action === "prepare" || body.action === "recover") {
         const caller = await requireAuthenticatedUser(req, url, key);
         if (caller instanceof Response) return caller;
@@ -53,15 +55,30 @@ export function createHandler(providers: ProviderFactory = paymentProvider) {
               reservationId: body.reservationId,
             });
           }
-          const { data: c } = await admin.from("toss_checkouts").select(
+          const { data: c, error: checkoutError } = await admin.from("toss_checkouts").select(
             "order_id",
           ).eq("reservation_id", body.reservationId).maybeSingle();
+          if (checkoutError) throw checkoutError;
           return jsonResponse(
             200,
             c
               ? await reconcileCheckout(admin, c.order_id, undefined, providers)
               : { status: r.status, reservationId: body.reservationId },
           );
+        }
+        const { data: rental, error: rentalError } = await admin.from("reservations")
+          .select("borrower_id,lender_id,payment_attempt_merchant_uid")
+          .eq("id", body.reservationId).single();
+        if (rentalError || !rental || rental.borrower_id !== caller.id) {
+          return jsonResponse(403, {});
+        }
+        // Restoring a link for an already initiated payment must remain
+        // available after suspension; a fresh approval may not begin.
+        if (!rental.payment_attempt_merchant_uid) {
+          const active = await Promise.all([rental.borrower_id, rental.lender_id].map((id) =>
+            rpc<boolean>(admin, "account_is_active", { p_user_id: id })
+          ));
+          if (active.some((allowed) => !allowed)) return jsonResponse(403, {});
         }
         providers("toss"); // Validate provider configuration before opening a checkout.
         const origin = Deno.env.get("DOLPIN_WEB_URL");

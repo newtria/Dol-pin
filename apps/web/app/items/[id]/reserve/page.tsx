@@ -19,6 +19,7 @@ export default function Reserve({params}:{params:Promise<{id:string}>}) {
  const draft=useRentalDrafts(state=>state.drafts[id]); const [recovery,setRecovery]=useState<{owner:string;item:string;request:RentalRequest|null}>(); const [recoveryError,setRecoveryError]=useState<unknown>();
  const form=useForm({resolver:zodResolver(rentalPeriodInput),values:{startsAt:draft?.startsAt??'',endsAt:draft?.endsAt??''}});
  const item=useQuery({queryKey:['item',id],queryFn:()=>api.item(id)});
+ const availability=useQuery({queryKey:['availability',id],queryFn:()=>api.itemAvailability(id)});
  const period=useWatch({control:form.control});
  const estimate=item.data?rentalEstimate(period.startsAt??'',period.endsAt??'',item.data.daily_price,item.data.deposit):null;
 
@@ -44,6 +45,7 @@ export default function Reserve({params}:{params:Promise<{id:string}>}) {
  return <section className="mx-auto flex max-w-xl flex-col gap-8"><h1 className="text-3xl font-bold">대여 기간 선택</h1><h2 className="text-xl font-semibold">{item.data?.title}</h2>
  {item.data&&!saved?<p>{formatWon(item.data.daily_price)} / 24시간 · 보증금 {formatWon(item.data.deposit)}</p>:null}
  <p className="text-muted-foreground">한국 시간 기준입니다. 24시간 미만은 1일 요금이며, 반납까지의 이용 시간을 올림해 계산합니다.</p>
+ <section><h2 className="font-semibold">예약할 수 없는 기간</h2>{availability.data?.length===0?<p>현재 확정된 예약이 없습니다. 최종 가능 여부는 요청 시 확인합니다.</p>:availability.data?.map((slot,index)=><p key={index}>{formatKoreaTime(slot.starts_at)} → {formatKoreaTime(slot.ends_at)}</p>)}<Failure error={availability.error}/></section>
  {saved?<p>이전 요청의 결과를 확인해 주세요. 확인 전에는 대여 기간을 변경할 수 없습니다.{'\n'}{formatKoreaTime(saved.p_starts_at)} → {formatKoreaTime(saved.p_ends_at)}</p>:null}
  <form onSubmit={e=>{e.preventDefault();if(saved)request.mutate({startsAt:'',endsAt:''});else void form.handleSubmit(v=>request.mutate(v))(e);}}><FieldGroup>
  {!saved?(['startsAt','endsAt'] as const).map(name=><Controller key={name} name={name} control={form.control} render={({field})=><Field data-invalid={!!form.formState.errors[name]}><FieldLabel htmlFor={name}>{name==='startsAt'?'시작 일시':'반납 일시'}</FieldLabel><Input {...field} id={name} type="datetime-local" disabled={request.isPending||!!saved||!recoveryReady} aria-invalid={!!form.formState.errors[name]} onInput={event=>{const value=event.currentTarget.value;field.onChange(value);useRentalDrafts.getState().setDraft(id,{...form.getValues(),[name]:value});}} onChange={event=>{const value=event.target.value;field.onChange(value);useRentalDrafts.getState().setDraft(id,{...form.getValues(),[name]:value});}}/><FieldError errors={[form.formState.errors[name]]}/></Field>}/>):null}
