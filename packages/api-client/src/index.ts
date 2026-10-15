@@ -66,7 +66,8 @@ export function createApi(client: Client) {
         // PostgreSQL errors are definitive transaction failures; transport,
         // gateway and ambiguous responses retain the recovery request.
         const rejected=result.status>=400 && result.status<500 && /^[0-9A-Z]{5}$/.test(result.error.code??'');
-        throw rejected?new RentalRequestRejected(result.error.message):new Error(result.error.message);
+        throw rejected?new RentalRequestRejected(result.error.message,result.error.code)
+          :Object.assign(new Error(result.error.message),{code:result.error.code});
       }
       const rental=result.data;
       if (!rental) throw new Error('예약 결과를 확인하지 못했습니다. 같은 요청으로 재시도해 주세요.');
@@ -108,11 +109,6 @@ export function createApi(client: Client) {
     },
     async returnRental(reservationId:string,path:string) {
       return value(await client.rpc('return_rental',{p_reservation_id:reservationId,p_photo_path:path}));
-    },
-    async evidenceUrl(path:string) {
-      const result=value(await client.storage.from('rental-evidence').createSignedUrl(path,300));
-      if(!result)throw new Error('반납 사진을 불러오지 못했습니다.');
-      return result.signedUrl;
     },
     async item(id: string) {
       const result=value(await client.from('rental_items').select(itemColumns).eq('id', id).single());

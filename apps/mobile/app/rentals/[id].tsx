@@ -44,7 +44,7 @@ export default function Rental(){
  const partialPickup=!!(pickup.data?.borrowerConfirmed||pickup.data?.lenderConfirmed);
  const guidance=r?rentalGuidance(r,r.lender_id===session?.user.id,hasRecovery?recovery.data:undefined):null;
  useEffect(()=>{if(recovery.data)void queries.invalidateQueries({queryKey:['rental',id]});},[recovery.dataUpdatedAt,id,queries]);
- const evidence=useQuery({queryKey:['evidence',id,session?.user.id,r?.return_photo],queryFn:()=>api.evidenceUrl(r!.return_photo!),enabled:pathname===`/rentals/${id}`&&!!session&&!!r?.return_photo?.startsWith(`${id}/`),staleTime:240000});
+ const evidence=useQuery({queryKey:['evidence',id,session?.user.id,r?.return_photo],queryFn:()=>api.evidenceUrl(id),enabled:pathname===`/rentals/${id}`&&!!session&&!!r?.return_photo,staleTime:240000});
  return <ScrollView contentContainerStyle={s.content}><Text style={s.title}>거래 상세</Text><ErrorText error={rental.error??action.error??payment.error??command.error??returnPhoto.error??choosePhoto.error??evidence.error??(hasRecovery?recovery.error:null)}/>
  {!session?<Text style={s.muted}>거래를 확인하려면 로그인해 주세요.</Text>:rental.isPending?<Text style={s.muted}>거래를 불러오고 있습니다.</Text>:null}
  {r?<><Text style={s.heading}>{rentalTitle(r)}</Text><Text style={s.body}>{rentalStatusLabels[r.status??'']??'상태 확인 필요'}</Text>

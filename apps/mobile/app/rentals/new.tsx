@@ -1,9 +1,9 @@
 import {pendingRentals} from '../../src/pending-rentals';
 import {DateField} from '../../src/date-field';
 import {type RentalRequest} from '@dolpin/api-client';
-import {useEffect,useState} from 'react';
+import {useCallback,useEffect,useRef,useState} from 'react';
 import {ScrollView,Text} from 'react-native';
-import {router,useLocalSearchParams} from 'expo-router';
+import {router,useFocusEffect,useLocalSearchParams} from 'expo-router';
 import {randomUUID} from 'expo-crypto';
 import {Controller,useForm,useWatch} from 'react-hook-form';
 import {zodResolver} from '@hookform/resolvers/zod';
@@ -19,6 +19,11 @@ export default function RequestRental() {
 }
 function RentalRequestContents(){
  const {itemId}=useLocalSearchParams<{itemId:string}>(); const {session}=useSession();
+ const mounted=useRef(false);const focused=useRef(false);
+ useFocusEffect(useCallback(()=>{
+  focused.current=true;
+  return ()=>{focused.current=false;};
+ },[]));
  const queries=useQueryClient(); const draft=useRentalDrafts.getState().drafts[itemId]; const [recovery,setRecovery]=useState<{owner:string;item:string;request:RentalRequest|null}>(); const [recoveryError,setRecoveryError]=useState<unknown>();
  const item=useQuery({queryKey:['item',itemId],queryFn:()=>api.item(itemId)});
  const availability=useQuery({queryKey:['availability',itemId],queryFn:()=>api.itemAvailability(itemId)});
@@ -28,11 +33,11 @@ function RentalRequestContents(){
  const recoveryReady=!!session&&recovery?.owner===session.user.id&&recovery.item===itemId;
  const saved=recoveryReady?recovery.request:null;
  useEffect(()=>{
-  let active=true;setRecovery(undefined);setRecoveryError(undefined);
+  let active=true;mounted.current=true;setRecovery(undefined);setRecoveryError(undefined);
   if(session)void pendingRentals.read(session.user.id,itemId).then(request=>{
     if(active)setRecovery({owner:session.user.id,item:itemId,request});
   }).catch(error=>{if(active)setRecoveryError(error);});
-  return ()=>{active=false;};
+  return ()=>{active=false;mounted.current=false;};
  },[session?.user.id,itemId]);
  const request=useMutation({mutationFn:async(v:{startsAt:string;endsAt:string})=>{
   if(!session||!recoveryReady)throw new Error('저장된 요청을 확인하고 있습니다.');
@@ -40,10 +45,28 @@ function RentalRequestContents(){
   const owner=session.user.id;
   const input=saved??{p_item_id:itemId,p_starts_at:koreaTime(v.startsAt),p_ends_at:koreaTime(v.endsAt),p_item_version:item.data!.updated_at!,p_request_id:randomUUID()};
   setRecovery({owner,item:itemId,request:input});
-  try {return await pendingRentals.submit(owner,input,api.requestRental);}
-  finally {setRecovery({owner,item:itemId,request:await pendingRentals.read(owner,itemId)});}
- },onSuccess:r=>{useRentalDrafts.getState().removeDraft(itemId);void queries.invalidateQueries({queryKey:['rentals']});router.replace(`/rentals/${r.id}`);}});
+  try {return await pendingRentals.submit(owner,input,request=>{
+   if(!mounted.current||!focused.current)throw new Error('저장된 요청을 확인하고 있습니다.');
+   return api.requestRental(request);
+  });}
+  finally {
+   if(mounted.current){
+    const request=await pendingRentals.read(owner,itemId);
+    if(mounted.current)setRecovery({owner,item:itemId,request});
+   }
+  }
+ },onSuccess:r=>{
+  if(!mounted.current)return;
+  useRentalDrafts.getState().removeDraft(itemId);void queries.invalidateQueries({queryKey:['rentals']});
+  if(focused.current)router.replace(`/rentals/${r.id}`);
+ }});
  if (!session) return <ScrollView contentContainerStyle={s.content}><Text style={s.title}>예약하려면 로그인해 주세요</Text><Button label="로그인" onPress={()=>router.push('/account')}/></ScrollView>;
+ const completedRental=request.isSuccess?request.data:null;
+ if(completedRental)return <ScrollView contentContainerStyle={s.content}>
+  <Text style={s.title}>예약 요청을 완료했습니다</Text>
+  <Text style={s.body}>대여자의 수락 상태는 거래 상세에서 확인해 주세요.</Text>
+  <Button label="거래 보기" onPress={()=>router.replace(`/rentals/${completedRental.id}`)}/>
+ </ScrollView>;
  return <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
   <Text style={s.title}>대여 기간 선택</Text><Text style={s.heading}>{item.data?.title}</Text>
   {item.data&&!saved?<Text style={s.muted}>{formatWon(item.data.daily_price)} / 24시간 · 보증금 {formatWon(item.data.deposit)}</Text>:null}

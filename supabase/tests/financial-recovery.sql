@@ -21,6 +21,11 @@ BEGIN
  c:=public.prepare_toss_checkout(r,'11000000-0000-4000-8000-000000000002','first-window',false);
  PERFORM public.prepare_toss_checkout(r,'11000000-0000-4000-8000-000000000002','second-window',true);
  IF (SELECT count(*) FROM public.toss_checkout_sessions WHERE order_id=c.order_id)<>2 THEN RAISE EXCEPTION 'checkout windows were revoked'; END IF;
+ IF NOT public.claim_toss_confirmation(c.order_id,lease2,NULL) THEN RAISE EXCEPTION 'initial worker lookup claim failed'; END IF;
+ IF public.claim_toss_confirmation(c.order_id,lease1,'fixture-key') THEN RAISE EXCEPTION 'first browser key bypassed worker lease'; END IF;
+ PERFORM public.record_rental_recovery_attempt('checkout',c.order_id,lease2,'CHECKOUT_LOOKUP_PENDING',false,false);
+ PERFORM public.release_toss_confirmation(c.order_id,lease2);
+ IF public.claim_toss_confirmation(c.order_id,lease2,NULL) THEN RAISE EXCEPTION 'worker bypassed its own lookup interval'; END IF;
  IF NOT public.claim_toss_confirmation(c.order_id,lease1,'fixture-key') THEN RAISE EXCEPTION 'claim failed'; END IF;
  IF public.claim_toss_confirmation(c.order_id,lease2,'fixture-key') THEN RAISE EXCEPTION 'concurrent approval claim allowed'; END IF;
  PERFORM public.release_toss_confirmation(c.order_id,lease2);
@@ -29,6 +34,16 @@ BEGIN
  PERFORM public.release_toss_confirmation(c.order_id,lease1);
  IF public.claim_toss_confirmation(c.order_id,lease2,'fixture-key')
  OR public.claim_toss_confirmation(c.order_id,lease2,NULL) THEN RAISE EXCEPTION 'checkout retry bypassed backoff'; END IF;
+ UPDATE public.toss_checkouts SET next_attempt_at=clock_timestamp()-interval '1 second' WHERE order_id=c.order_id;
+ IF NOT public.claim_toss_confirmation(c.order_id,lease2,NULL) THEN RAISE EXCEPTION 'due worker lookup claim failed'; END IF;
+ PERFORM public.record_rental_recovery_attempt('checkout',c.order_id,lease2,'CHECKOUT_LOOKUP_PENDING',false,false);
+ PERFORM public.release_toss_confirmation(c.order_id,lease2);
+ IF public.claim_toss_confirmation(c.order_id,lease2,NULL) THEN RAISE EXCEPTION 'worker repeated lookup before due time'; END IF;
+ IF NOT public.claim_toss_confirmation(c.order_id,lease2,'fixture-key') THEN RAISE EXCEPTION 'worker lookup starved existing browser approval key'; END IF;
+ PERFORM public.record_rental_recovery_attempt('checkout',c.order_id,lease2,'OUTCOME_PENDING',false,false);
+ PERFORM public.release_toss_confirmation(c.order_id,lease2);
+ IF public.claim_toss_confirmation(c.order_id,lease1,'fixture-key')
+ OR public.claim_toss_confirmation(c.order_id,lease1,NULL) THEN RAISE EXCEPTION 'browser approval outcome bypassed backoff'; END IF;
  UPDATE public.toss_checkouts SET next_attempt_at=clock_timestamp()-interval '1 second' WHERE order_id=c.order_id;
  IF NOT public.claim_toss_confirmation(c.order_id,lease2,'fixture-key') THEN RAISE EXCEPTION 'due checkout retry failed'; END IF;
  BEGIN
@@ -48,8 +63,8 @@ BEGIN
   PERFORM public.fail_toss_confirmation(c.order_id,lease2);
   RAISE EXCEPTION 'expired worker expired checkout before handoff';
  EXCEPTION WHEN raise_exception THEN IF SQLERRM='expired worker expired checkout before handoff' THEN RAISE; END IF; END;
- PERFORM public.record_rental_recovery_attempt('checkout',c.order_id,lease2,'OUTCOME_PENDING',false,false);
- IF (SELECT last_error_code FROM public.toss_checkouts WHERE order_id=c.order_id)<>'UPSTREAM_UNAVAILABLE'
+ PERFORM public.record_rental_recovery_attempt('checkout',c.order_id,lease2,'EXPIRED_WORKER_RESULT',false,false);
+ IF (SELECT last_error_code FROM public.toss_checkouts WHERE order_id=c.order_id)<>'OUTCOME_PENDING'
  THEN RAISE EXCEPTION 'expired worker overwrote recovery state'; END IF;
  IF NOT public.claim_toss_confirmation(c.order_id,lease1,'fixture-key') THEN RAISE EXCEPTION 'expired checkout not reclaimed'; END IF;
  UPDATE public.reservations SET payment_attempt_merchant_uid='different-order' WHERE id=r;

@@ -1,7 +1,7 @@
 'use client';
 import {pendingRentals} from '@/lib/pending-rentals';
 import {type RentalRequest} from '@dolpin/api-client';
-import {use,useEffect,useState} from 'react';
+import {use,useEffect,useRef,useState} from 'react';
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import {Controller,useForm,useWatch} from 'react-hook-form';
@@ -15,7 +15,12 @@ import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Field,FieldLabel,FieldGroup,FieldError} from '@/components/ui/field';
 export default function Reserve({params}:{params:Promise<{id:string}>}) {
- const {id}=use(params); const {api,session}=useApi(); const router=useRouter(); const queries=useQueryClient();
+ const {id}=use(params); const {session}=useApi();
+ return <RentalRequestContents key={`${session?.user.id??'signed-out'}:${id}`} id={id}/>;
+}
+function RentalRequestContents({id}:{id:string}) {
+ const {api,session}=useApi(); const router=useRouter(); const queries=useQueryClient();
+ const mounted=useRef(false);
  const draft=useRentalDrafts(state=>state.drafts[id]); const [recovery,setRecovery]=useState<{owner:string;item:string;request:RentalRequest|null}>(); const [recoveryError,setRecoveryError]=useState<unknown>();
  const form=useForm({resolver:zodResolver(rentalPeriodInput),values:{startsAt:draft?.startsAt??'',endsAt:draft?.endsAt??''}});
  const item=useQuery({queryKey:['item',id],queryFn:()=>api.item(id)});
@@ -26,11 +31,11 @@ export default function Reserve({params}:{params:Promise<{id:string}>}) {
  const recoveryReady=!!session&&recovery?.owner===session.user.id&&recovery.item===id;
  const saved=recoveryReady?recovery.request:null;
  useEffect(()=>{
-  let active=true;setRecovery(undefined);setRecoveryError(undefined);
+  let active=true;mounted.current=true;setRecovery(undefined);setRecoveryError(undefined);
   if(session)void pendingRentals.read(session.user.id,id).then(request=>{
     if(active)setRecovery({owner:session.user.id,item:id,request});
   }).catch(error=>{if(active)setRecoveryError(error);});
-  return ()=>{active=false;};
+  return ()=>{active=false;mounted.current=false;};
  },[session?.user.id,id]);
  const request=useMutation({mutationFn:async(v:{startsAt:string;endsAt:string})=>{
   if(!session||!recoveryReady)throw new Error('저장된 요청을 확인하고 있습니다.');
@@ -38,9 +43,20 @@ export default function Reserve({params}:{params:Promise<{id:string}>}) {
   const owner=session.user.id;
   const input=saved??{p_item_id:id,p_starts_at:koreaTime(v.startsAt),p_ends_at:koreaTime(v.endsAt),p_item_version:item.data!.updated_at!,p_request_id:crypto.randomUUID()};
   setRecovery({owner,item:id,request:input});
-  try {return await pendingRentals.submit(owner,input,api.requestRental);}
-  finally {setRecovery({owner,item:id,request:await pendingRentals.read(owner,id)});}
- },onSuccess:r=>{useRentalDrafts.getState().removeDraft(id);void queries.invalidateQueries({queryKey:['rentals']});router.replace(`/rentals/${r.id}`);}});
+  try {return await pendingRentals.submit(owner,input,request=>{
+   if(!mounted.current)throw new Error('저장된 요청을 확인하고 있습니다.');
+   return api.requestRental(request);
+  });}
+  finally {
+   if(mounted.current){
+    const request=await pendingRentals.read(owner,id);
+    if(mounted.current)setRecovery({owner,item:id,request});
+   }
+  }
+ },onSuccess:r=>{
+  if(!mounted.current)return;
+  useRentalDrafts.getState().removeDraft(id);void queries.invalidateQueries({queryKey:['rentals']});router.replace(`/rentals/${r.id}`);
+ }});
  if(!session)return <Button asChild><Link href="/account">로그인하고 예약하기</Link></Button>;
  return <section className="mx-auto flex max-w-xl flex-col gap-8"><h1 className="text-3xl font-bold">대여 기간 선택</h1><h2 className="text-xl font-semibold">{item.data?.title}</h2>
  {item.data&&!saved?<p>{formatWon(item.data.daily_price)} / 24시간 · 보증금 {formatWon(item.data.deposit)}</p>:null}

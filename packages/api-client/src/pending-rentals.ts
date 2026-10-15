@@ -8,7 +8,14 @@ export type RequestStorage = {
   runExclusive?<T>(key:string,work:()=>Promise<T>):Promise<T>;
 };
 // Only a confirmed server rejection permits a new request identity.
-export class RentalRequestRejected extends Error {}
+export class RentalRequestRejected extends Error {
+  readonly code?:string;
+  constructor(message:string,code?:string) {
+    super(message);
+    this.name='RentalRequestRejected';
+    this.code=code;
+  }
+}
 
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const timestampMillis=(value:string)=>Date.parse(value.replace(/\.(\d{1,6})(?=Z|[+-])/,(_match,fraction:string)=>`.${fraction.slice(0,3).padEnd(3,'0')}`));

@@ -195,3 +195,40 @@ test('expired checkout explains the state and provides a working way back',async
   await b.page.getByRole('link',{name:'거래로 돌아가기'}).click();await expect(b.page).toHaveURL(new RegExp(path+'$'));
  }finally{await b.context.close();await l.context.close();expect((await request.post(`${gateway}/__qa/cleanup`,{data:{tag:f.tag}})).ok()).toBeTruthy();}
 });
+
+test('a late reservation response cannot navigate after another tab signs out',async({browser,request})=>{
+ const f=await seed(request);const b=await actor(browser,f.borrower);
+ let releaseResponse!:()=>void,requestReached!:()=>void;
+ const responseGate=new Promise<void>(resolve=>{releaseResponse=resolve;});
+ const requestReady=new Promise<void>(resolve=>{requestReached=resolve;});
+ try {
+  // Commit the real reservation, but keep its response in flight across an
+  // actual Auth event. The old request must still clean up its own journal.
+  await b.page.route('**/rest/v1/rpc/request_rental',async route=>{
+   const response=await route.fetch();expect(response.ok()).toBeTruthy();
+   requestReached();await responseGate;await route.fulfill({response});
+  });
+  await b.page.goto(`/items/${f.item.id}/reserve`);
+  const start=new Date(Date.now()+8*86400000+9*3600000).toISOString().slice(0,16);
+  const end=new Date(Date.now()+8*86400000+13*3600000).toISOString().slice(0,16);
+  await b.page.getByLabel('시작 일시').fill(start);await b.page.getByLabel('반납 일시').fill(end);
+  await b.page.getByRole('button',{name:'예약 요청',exact:true}).click();await requestReady;
+  const journal=`dolpin-rental-request-v1.${f.borrower.user.id}.${f.item.id}`;
+  expect(await b.page.evaluate(key=>localStorage.getItem(key),journal)).not.toBeNull();
+  const account=await b.context.newPage();await account.goto('/account');
+  await account.getByRole('button',{name:'로그아웃',exact:true}).click();
+  await expect(b.page.getByRole('link',{name:'로그인하고 예약하기'})).toBeVisible();
+  releaseResponse();
+  await b.page.waitForFunction(key=>localStorage.getItem(key)===null,journal);
+  const redirected=await b.page.waitForURL(/\/rentals\/[0-9a-f-]+$/,{timeout:1500}).then(()=>true,error=>{
+   if(error.name==='TimeoutError')return false;
+   throw error;
+  });
+  expect(redirected,'the completed request must not navigate the signed-out tab').toBe(false);
+  await expect(b.page).toHaveURL(new RegExp(`/items/${f.item.id}/reserve$`));
+  await expect(b.page.getByRole('link',{name:'로그인하고 예약하기'})).toBeVisible();
+ }finally{
+  releaseResponse();await b.context.close();
+  expect((await request.post(`${gateway}/__qa/cleanup`,{data:{tag:f.tag}})).ok()).toBeTruthy();
+ }
+});

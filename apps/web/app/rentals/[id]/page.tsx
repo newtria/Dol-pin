@@ -40,7 +40,7 @@ export default function Rental({params}:{params:Promise<{id:string}>}){
  const partialPickup=!!(pickup.data?.borrowerConfirmed||pickup.data?.lenderConfirmed);
  const guidance=r?rentalGuidance(r,r.lender_id===session?.user.id,hasRecovery?recovery.data:undefined):null;
  useEffect(()=>{if(recovery.data)void queries.invalidateQueries({queryKey:['rental',id]});},[recovery.dataUpdatedAt,id,queries]);
- const evidence=useQuery({queryKey:['evidence',id,session?.user.id,r?.return_photo],queryFn:()=>api.evidenceUrl(r!.return_photo!),enabled:!!session&&!!r?.return_photo?.startsWith(`${id}/`),staleTime:240000});
+ const evidence=useQuery({queryKey:['evidence',id,session?.user.id,r?.return_photo],queryFn:()=>api.evidenceUrl(id),enabled:!!session&&!!r?.return_photo,staleTime:240000});
  return <section className="mx-auto flex max-w-2xl flex-col gap-8"><h1 className="text-3xl font-bold">거래 상세</h1><Failure error={rental.error??action.error??payment.error??command.error??returnPhoto.error??evidence.error??(hasRecovery?recovery.error:null)}/>
  {!session?<p>거래를 확인하려면 로그인해 주세요.</p>:rental.isPending?<p>거래를 불러오고 있습니다.</p>:null}
  {r?<><h2 className="text-2xl font-semibold">{rentalTitle(r)}</h2><p>{rentalStatusLabels[r.status??'']??'상태 확인 필요'}</p><p>{r.starts_at?formatKoreaTime(r.starts_at):r.rental_date} → {r.ends_at?formatKoreaTime(r.ends_at):r.return_date}</p>

@@ -103,7 +103,7 @@ export async function reconcileCheckout(
         "checkout",
         orderId,
         lease,
-        "OUTCOME_PENDING",
+        paymentKey ? "OUTCOME_PENDING" : "CHECKOUT_LOOKUP_PENDING",
         false,
         false,
       );
@@ -133,7 +133,7 @@ export async function reconcileCheckout(
       "checkout",
       orderId,
       lease,
-      "OUTCOME_PENDING",
+      paymentKey ? "OUTCOME_PENDING" : "CHECKOUT_LOOKUP_PENDING",
       false,
       false,
     );

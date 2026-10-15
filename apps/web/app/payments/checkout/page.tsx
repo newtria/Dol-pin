@@ -3,6 +3,7 @@ import {useEffect,useState} from 'react';
 import {Button} from '@/components/ui/button';
 import {Failure} from '@/lib/feedback';
 import {formatKoreaTime} from '@dolpin/contracts';
+import {recoverCheckout,type CheckoutConfirmation} from '@/lib/checkout-recovery';
 type Checkout={orderId:string;amount:number;customerKey:string;reservationId:string;mobile:boolean;canPay:boolean;recovering:boolean;status:string};
 type Phase='loading'|'ready'|'processing'|'needs_review'|'paid'|'expired'|'unavailable';
 async function call(body:Record<string,unknown>) {
@@ -16,7 +17,7 @@ export default function CheckoutPage(){
  useEffect(()=>{
   let active=true,timer:ReturnType<typeof setTimeout>|undefined;
   const fragment=new URLSearchParams(location.hash.slice(1)),query=new URLSearchParams(location.search);
-  let orderId:string|null,token:string|null;
+  let orderId:string|null,token:string|null,confirmation:CheckoutConfirmation|null=null;
   try{
    orderId=fragment.get('orderId')??query.get('orderId')??sessionStorage.getItem('toss-order');
    token=fragment.get('token')??sessionStorage.getItem(`toss-${orderId}`);
@@ -27,7 +28,7 @@ export default function CheckoutPage(){
   async function poll(){
    if(!active)return;
    if(document.visibilityState==='hidden'){timer=setTimeout(poll,5000);return;}
-   try{const result=await call({action:'status',orderId,token});if(!active)return;setConnectionLost(false);if(apply(result.status,result.recoveryState,result.nextRetryAt))return;}
+   try{const result=await recoverCheckout(command=>call({...command,orderId,token}),confirmation,()=>active&&document.visibilityState!=='hidden');if(!active)return;setConnectionLost(false);if(apply(result.status,result.recoveryState,result.nextRetryAt))return;}
    catch{if(active)setConnectionLost(true);}
    if(active)timer=setTimeout(poll,5000);
   }
@@ -46,8 +47,11 @@ export default function CheckoutPage(){
     const c:Checkout=await call({action:'checkout',orderId,token});if(!active)return;setCheckout(c);
     if(c.status==='paid'){apply('paid');return;}
     if(query.has('paymentKey')){
+     const paymentKey=query.get('paymentKey'),amount=Number(query.get('amount'));
+     if(!paymentKey||amount!==c.amount){setPhase('unavailable');setError({code:'INVALID_REQUEST'});return;}
+     confirmation={paymentKey,amount};
      setPhase('processing');
-     try{const result=await call({action:'confirm',orderId,token,paymentKey:query.get('paymentKey'),amount:Number(query.get('amount'))});if(apply(result.status))return;}
+     try{const result=await call({action:'confirm',orderId,token,...confirmation});if(apply(result.status,result.recoveryState,result.nextRetryAt))return;}
      catch{if(active)setConnectionLost(true);}
      if(active)timer=setTimeout(poll,5000);return;
     }

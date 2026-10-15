@@ -12,6 +12,51 @@ async function call(handler: (req: Request) => Promise<Response>, token: string,
   return { code: response.status, data: await response.json() };
 }
 
+Deno.test('return evidence: private command compatibility and scoped historical signing', async () => {
+  const f = await fixture();
+  const finance = financeHandler(fakeProvider().factory);
+  const legacyPaths: string[] = [];
+  try {
+    checked(await f.admin.auth.admin.updateUserById(f.outsider.id, { app_metadata: { dolpin_operator: true } }));
+    const r = await f.rental();
+    await localSql(`UPDATE public.reservations SET status='paid',payment_provider='portone',payment_id='qa-${r.id}' WHERE id='${r.id}';
+      INSERT INTO storage.buckets(id,name,public) VALUES('rental-photos','rental-photos',true) ON CONFLICT DO NOTHING;`);
+    checked(await f.borrower.client.rpc('confirm_rental_pickup', { p_reservation_id: r.id }));
+    checked(await f.lender.client.rpc('confirm_rental_pickup', { p_reservation_id: r.id }));
+    const path = `${r.id}/${f.borrower.id}/private.png`;
+    const legacyPath = `returns/${r.id}/${f.borrower.id}/legacy.png`;
+    legacyPaths.push(legacyPath);
+    checked(await f.borrower.client.storage.from('rental-evidence').upload(path, png, { contentType: 'image/png' }));
+    checked(await f.borrower.client.storage.from('rental-photos').upload(legacyPath, png, { contentType: 'image/png' }));
+    assert((await f.borrower.client.rpc('confirm_reservation_return', {
+      p_reservation_id: r.id, p_return_photo: legacyPath,
+    })).error, 'legacy return RPC bypassed the private evidence requirement for a new rental');
+    checked(await f.borrower.client.rpc('confirm_reservation_return', { p_reservation_id: r.id, p_return_photo: path }));
+    const privateLocation = checked(await f.lender.client.rpc('rental_return_evidence', { p_reservation_id: r.id }));
+    assert(privateLocation.bucket === 'rental-evidence' && privateLocation.path === path, 'private submitted evidence identity changed');
+    assert((await f.outsider.client.rpc('rental_return_evidence', { p_reservation_id: r.id })).error, 'operator JWT bypassed participant evidence access');
+    const privatePhoto = await call(finance, f.outsider.session.access_token, { action: 'returnPhotoUrl', reservationId: r.id });
+    assert(privatePhoto.code === 200 && new URL(privatePhoto.data.url).pathname.includes('/rental-evidence/'), 'operator did not sign private return evidence');
+
+    // Model an already persisted legacy URL without changing its object owner.
+    const legacyUrl = f.borrower.client.storage.from('rental-photos').getPublicUrl(legacyPath).data.publicUrl;
+    await localSql(`UPDATE public.reservations SET starts_at=NULL,ends_at=NULL,return_photo='${legacyUrl}' WHERE id='${r.id}';`);
+    const legacyLocation = checked(await f.lender.client.rpc('rental_return_evidence', { p_reservation_id: r.id }));
+    assert(legacyLocation.bucket === 'rental-photos' && legacyLocation.path === legacyPath, 'participant could not resolve historical return evidence');
+    const participantPhoto = checked(await f.lender.client.storage.from(legacyLocation.bucket).createSignedUrl(legacyLocation.path, 60));
+    assert(new URL(participantPhoto.signedUrl).pathname.includes('/rental-photos/returns/'), 'participant signed the wrong historical evidence bucket');
+    const legacyPhoto = await call(finance, f.outsider.session.access_token, { action: 'returnPhotoUrl', reservationId: r.id });
+    assert(legacyPhoto.code === 200 && new URL(legacyPhoto.data.url).pathname.includes('/rental-photos/returns/'), 'operator could not sign historical return evidence');
+    assert(checked(await f.admin.from('finance_operator_audit').select('id').eq('reservation_id', r.id).eq('action', 'view_return_evidence')).length === 2, 'return evidence access was not audited');
+    await localSql(`UPDATE public.reservations SET return_photo='${legacyUrl}?unexpected=1' WHERE id='${r.id}';`);
+    assert((await f.lender.client.rpc('rental_return_evidence', { p_reservation_id: r.id })).error, 'participant evidence resolver accepted a noncanonical URL');
+    assert((await call(finance, f.outsider.session.access_token, { action: 'returnPhotoUrl', reservationId: r.id })).code === 404, 'operator signed a noncanonical return URL');
+  } finally {
+    if (legacyPaths.length) checked(await f.admin.storage.from('rental-photos').remove(legacyPaths));
+    await f.cleanup();
+  }
+});
+
 Deno.test('commercial finance: operator authority, partial dispute, private payout claim and single transfer', async () => {
   const f = await fixture();
   const pg = fakeProvider(), checkout = checkoutHandler(pg.factory), finance = financeHandler(pg.factory);

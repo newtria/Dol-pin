@@ -20,7 +20,7 @@ DO $$ DECLARE c public.toss_checkouts; r uuid := current_setting('test.rental_id
  c:=public.prepare_toss_checkout(r,'11000000-0000-4000-8000-000000000002','hash',false);
  IF c.amount<>(SELECT total_paid FROM public.reservations WHERE id=r) THEN RAISE EXCEPTION 'amount not server owned'; END IF;
  IF NOT public.claim_toss_confirmation(c.order_id,lease,NULL) THEN RAISE EXCEPTION 'initial lookup claim failed'; END IF;
- PERFORM public.record_rental_recovery_attempt('checkout',c.order_id,lease,'OUTCOME_PENDING',false,false);
+ PERFORM public.record_rental_recovery_attempt('checkout',c.order_id,lease,'CHECKOUT_LOOKUP_PENDING',false,false);
  PERFORM public.release_toss_confirmation(c.order_id,lease);
  IF NOT public.claim_toss_confirmation(c.order_id,lease,'test_payment') THEN RAISE EXCEPTION 'initial checkout claim failed'; END IF;
  UPDATE public.reservations SET payment_due_at=now()-interval '1 minute' WHERE id=r;

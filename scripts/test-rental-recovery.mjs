@@ -4,6 +4,8 @@ import {mkdtemp,readFile,writeFile,unlink,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createPendingRentals,RentalRequestRejected} from '../packages/api-client/src/pending-rentals.ts';
+import {errorMessage} from '../packages/api-client/src/errors.ts';
+import {recoverCheckout} from '../apps/web/lib/checkout-recovery.ts';
 
 const itemId='26000000-0000-4000-8000-000000000001';
 const nextRequestId='36000000-0000-4000-8000-000000000002';
@@ -45,6 +47,62 @@ test('definitive rejection unlocks editing; ambiguous failures retain recovery',
  assert.deepEqual(await journal.read('alice',itemId),input);
  await assert.rejects(journal.submit('alice',input,async()=>{throw new RentalRequestRejected('changed item');}));
  assert.equal(await journal.read('alice',itemId),null);
+});
+
+test('definitive reservation errors retain actionable codes after journal cleanup',async()=>{
+ for(const code of ['PCN01','P4290','23P01']) {
+  const storage=memoryStorage(),journal=createPendingRentals(storage);
+  const failure=new RentalRequestRejected('private SQL details',code);
+  await assert.rejects(journal.submit('alice',input,async()=>{throw failure;}),error=>{
+   assert.equal(error.code,code);
+   assert.equal(errorMessage(error),errorMessage({code}));
+   assert.doesNotMatch(errorMessage(error),/private|SQL/);
+   return true;
+  });
+  assert.equal(await journal.read('alice',itemId),null);
+ }
+});
+
+test('checkout retries confirmation after an occupied lease, transient failure and lost response',async()=>{
+ const confirmation={paymentKey:'payment-key',amount:35000},commands=[];
+ let attempts=0,paid=false;
+ const call=async command=>{
+  commands.push(command);
+  if(command.action==='status')return {status:paid?'paid':'processing',recoveryState:'processing',nextRetryAt:null};
+  assert.deepEqual(command,{action:'confirm',...confirmation});
+  attempts++;
+  if(attempts===1)return {status:'processing'}; // A worker still owns the lease.
+  if(attempts===2)throw new Error('provider lookup unavailable');
+  paid=true;throw new Error('confirmation response lost');
+ };
+ assert.equal((await recoverCheckout(call,confirmation)).status,'processing');
+ await assert.rejects(recoverCheckout(call,confirmation),/lookup unavailable/);
+ await assert.rejects(recoverCheckout(call,confirmation),/response lost/);
+ assert.equal((await recoverCheckout(call,confirmation)).status,'paid');
+ assert.deepEqual(commands.map(command=>command.action),['status','confirm','status','confirm','status','confirm','status']);
+});
+
+test('checkout leaves retry eligibility to the server and stops at review or a terminal state',async()=>{
+ const confirmation={paymentKey:'payment-key',amount:35000};
+ const nextRetryAt='2099-10-01T01:01:00Z';
+ let confirms=0,serverAllowsApproval=false,result={status:'processing',recoveryState:'retry_scheduled',nextRetryAt};
+ const call=async command=>{if(command.action==='status')return result;confirms++;return {status:serverAllowsApproval?'paid':'processing'};};
+ assert.equal((await recoverCheckout(call,confirmation)).nextRetryAt,nextRetryAt);
+ assert.equal(confirms,1);
+ serverAllowsApproval=true;
+ assert.equal((await recoverCheckout(call,confirmation)).status,'paid');
+ assert.equal(confirms,2,'the same future lookup interval must not starve an eligible approval');
+ for(const status of ['paid','expired','cancelled','rejected','settled','unavailable']) {
+  result={status};await recoverCheckout(call,confirmation);
+ }
+ result={status:'processing',recoveryState:'needs_review'};
+ await recoverCheckout(call,confirmation);
+ assert.equal(confirms,2);
+ result={status:'processing',recoveryState:'processing',nextRetryAt:null};
+ await recoverCheckout(call,null);
+ assert.equal(confirms,2,'a restored link without a payment key only reads status');
+ await recoverCheckout(call,confirmation,()=>false);
+ assert.equal(confirms,2,'leaving or hiding the page while status loads must not start approval');
 });
 
 function memoryStorage() {

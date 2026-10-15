@@ -141,7 +141,10 @@ export function createHandler(providers: ProviderFactory = paymentProvider) {
         const path = await rpc<string>(admin, "finance_evidence_access", {
           p_reservation_id: identifier(body.reservationId), p_actor: actor, p_kind: "return", p_path: null,
         });
-        const { data, error } = await admin.storage.from("rental-evidence").createSignedUrl(path, 300);
+        // The RPC returns a verified canonical path, including historical return
+        // objects. Sign on this project instead of opening a stored public URL.
+        const bucket = path.startsWith("returns/") ? "rental-photos" : "rental-evidence";
+        const { data, error } = await admin.storage.from(bucket).createSignedUrl(path, 300);
         if (error) throw error;
         result = { url: data.signedUrl };
       } else {

@@ -21,6 +21,17 @@ BEGIN
  first:=public.send_rental_message(rental.id,'거래 일정 문의입니다.','55000000-0000-4000-8000-000000000002');
  replay:=public.send_rental_message(rental.id,'거래 일정 문의입니다.','55000000-0000-4000-8000-000000000002');
  IF first.id<>replay.id THEN RAISE EXCEPTION 'retry duplicated message'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.chat_messages WHERE id=first.id AND message=first.message) THEN
+  RAISE EXCEPTION 'sender cannot read committed message';
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.chat_rooms WHERE id=first.room_id
+  AND last_message=first.message AND last_message_at=first.created_at) THEN
+  RAISE EXCEPTION 'message trigger did not update room preview';
+ END IF;
+ PERFORM public.submit_report('53000000-0000-4000-8000-000000000001',NULL,'other','거래 일정에 관한 문의입니다.',rental.id);
+ IF NOT EXISTS(SELECT 1 FROM public.reports WHERE reporter_id=auth.uid() AND reservation_id=rental.id) THEN
+  RAISE EXCEPTION 'reporter cannot read submitted report';
+ END IF;
  BEGIN
   PERFORM public.enqueue_notification(auth.uid(),'fake','fake','fake',rental.id);
  EXCEPTION WHEN insufficient_privilege THEN forbidden:=true;
@@ -59,11 +70,25 @@ BEGIN
  IF EXISTS(SELECT 1 FROM public.rental_items WHERE id='54000000-0000-4000-8000-000000000001') THEN RAISE EXCEPTION 'hidden item publicly visible'; END IF;
 END $$;
 
-RESET ROLE;
+SELECT set_config('request.jwt.claim.sub','53000000-0000-4000-8000-000000000003',true);
+DO $$
+BEGIN
+ IF EXISTS(SELECT 1 FROM public.chat_messages WHERE sender_id='53000000-0000-4000-8000-000000000002') THEN
+  RAISE EXCEPTION 'outsider can read another room messages';
+ END IF;
+ IF EXISTS(SELECT 1 FROM public.reports WHERE reporter_id='53000000-0000-4000-8000-000000000002') THEN
+  RAISE EXCEPTION 'outsider can read another reporter support history';
+ END IF;
+END $$;
+
+SET LOCAL ROLE service_role;
 SELECT set_config('request.jwt.claim.role','service_role',true);
 DO $$
 DECLARE blocked boolean:=false;
 BEGIN
+ IF NOT EXISTS(SELECT 1 FROM public.reports WHERE reporter_id='53000000-0000-4000-8000-000000000002' AND status='pending') THEN
+  RAISE EXCEPTION 'service cannot read moderation queue';
+ END IF;
  BEGIN
   PERFORM public.begin_account_closure('53000000-0000-4000-8000-000000000002');
  EXCEPTION WHEN SQLSTATE 'PCL01' THEN blocked:=true;

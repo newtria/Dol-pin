@@ -18,6 +18,7 @@ export type Dispute = {
   evidence_paths: string[]; created_at: string; resolved_at: string | null;
 };
 export type DisputeResolution = { refund_amount: number; reason: string; created_at: string | null };
+type ReturnEvidenceLocation = { bucket: 'rental-evidence' | 'rental-photos'; path: string };
 export type OperatorReview = {
   id: string; reservation_id: string;
   kind: 'pickup_overdue' | 'return_overdue' | 'settlement_overdue' | 'dispute_unresolved' | 'untracked_payment' | 'legacy_finance';
@@ -71,6 +72,7 @@ type FinanceFunctions = {
   rental_pickup_status: { Args: { p_reservation_id: string }; Returns: PickupConfirmation };
   open_rental_dispute: { Args: { p_reservation_id: string; p_reason: string; p_evidence_paths: string[] }; Returns: Dispute };
   add_rental_dispute_evidence: { Args: { p_reservation_id: string; p_path: string }; Returns: undefined };
+  rental_return_evidence: { Args: { p_reservation_id: string }; Returns: ReturnEvidenceLocation };
 };
 type FinanceDatabase = Omit<Database, 'public'> & {
   public: Omit<Database['public'], 'Functions' | 'Tables'> & {
@@ -133,6 +135,13 @@ export function createFinanceApi(client: SupabaseClient<Database>) {
     },
     async disputeEvidenceUrl(path: string): Promise<string> {
       const result = value(await client.storage.from('dispute-evidence').createSignedUrl(path, 300));
+      if (!result) throw new ApiRequestError({});
+      return result.signedUrl;
+    },
+    async evidenceUrl(reservationId: string): Promise<string> {
+      const location = value(await db.rpc('rental_return_evidence', { p_reservation_id: reservationId }));
+      if (!location || !['rental-evidence', 'rental-photos'].includes(location.bucket)) throw new ApiRequestError({});
+      const result = value(await client.storage.from(location.bucket).createSignedUrl(location.path, 300));
       if (!result) throw new ApiRequestError({});
       return result.signedUrl;
     },
