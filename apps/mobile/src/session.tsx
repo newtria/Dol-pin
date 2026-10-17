@@ -5,6 +5,7 @@ import {focusManager, useQueryClient} from '@tanstack/react-query';
 import {client} from './client';
 import {useRentalDrafts} from './rental-drafts';
 import {useExploreState} from './state';
+import {clearAuthReturn} from './auth-return';
 
 const Context = createContext<{session: Session | null; ready: boolean}>({session: null, ready: false});
 export const useSession = () => useContext(Context);
@@ -17,7 +18,11 @@ export function SessionProvider({children}: {children: ReactNode}) {
     let lastId: string | undefined;
     const {data: {subscription}} = client.auth.onAuthStateChange((_event, next) => {
       if (!active) return;
-      if (lastId !== next?.user.id) {queries.clear(); useExploreState.getState().clear(); useRentalDrafts.getState().clear();}
+      if (lastId !== next?.user.id) {
+        queries.clear();
+        // A guest's public date selection survives login; authenticated account changes clear it.
+        if(lastId){useExploreState.getState().clear();useRentalDrafts.getState().clear();void clearAuthReturn();}
+      }
       lastId = next?.user.id; setSession(next); setReady(true);
     });
     focusManager.setFocused(AppState.currentState === 'active');

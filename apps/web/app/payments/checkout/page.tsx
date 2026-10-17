@@ -72,10 +72,10 @@ export default function CheckoutPage(){
   }catch{setError(new Error('결제가 완료되지 않았습니다. 다시 시도하거나 거래로 돌아가 주세요.'));}finally{setBusy(false);}
  }
  const back=checkout?(checkout.mobile?`dolpin://payments/return?id=${checkout.reservationId}`:`/rentals/${checkout.reservationId}`):'/rentals';
- return <section className="mx-auto flex max-w-md flex-col gap-6"><h1 className="text-3xl font-bold">{phase==='paid'?'결제 완료':phase==='needs_review'?'결제 처리에 운영 확인이 필요해요':phase==='processing'?'결제 결과 확인 중':phase==='expired'?'결제 기한이 끝났어요':'예약 결제'}</h1>
+ return <section className="mx-auto flex max-w-lg flex-col gap-6 rounded-2xl border bg-card p-6 sm:p-8"><h1 className="text-3xl font-bold">{phase==='paid'?'결제 완료':phase==='needs_review'?'결제 처리에 운영 확인이 필요해요':phase==='processing'?'결제 결과 확인 중':phase==='expired'?'결제 기한이 끝났어요':'예약 결제'}</h1>
  <Failure error={error}/>
  {phase==='loading'?<p role="status">결제 정보를 불러오고 있습니다.</p>:null}
- {phase==='ready'&&checkout?<><p>대여료 및 보증금 {checkout.amount.toLocaleString('ko-KR')}원</p><p className="text-sm text-muted-foreground">보증금은 반납 확인 후 반환됩니다.</p><Button onClick={pay} disabled={busy}>{busy?'결제창 여는 중…':'토스페이먼츠로 결제'}</Button></>:null}
+ {phase==='ready'&&checkout?<><div className="rounded-xl bg-muted p-5"><p className="text-sm text-muted-foreground">대여료와 보증금을 포함한 결제 금액</p><p className="mt-2 text-3xl font-bold">{checkout.amount.toLocaleString('ko-KR')}원</p></div><p className="text-sm text-muted-foreground">보증금은 반납 확인 후 반환됩니다.</p><Button onClick={pay} disabled={busy}>{busy?'결제창 여는 중…':'토스페이먼츠로 결제'}</Button></>:null}
  {phase==='processing'?<div role="status" className="flex flex-col gap-3"><p>중복 결제하지 마세요. 결제 결과를 확인하고 있습니다.</p>{nextRetryAt?<p>다음 확인 예정: {formatKoreaTime(nextRetryAt)} 이후</p>:null}<p>{connectionLost?'연결이 원활하지 않아 다시 확인 중입니다. 결제 실패로 확정된 상태는 아닙니다.':'확인이 끝나면 이 화면이 자동으로 바뀝니다.'}</p><p className="text-sm text-muted-foreground">거래 상세에서 처리 상태를 이어서 확인할 수 있습니다.</p></div>:null}
  {phase==='needs_review'?<div role="status"><p>자동 처리가 멈췄습니다. 중복 결제하지 말고 거래 상세에서 처리 상태를 확인해 주세요.</p><p className="break-all">문의용 거래 번호: {checkout?.reservationId}</p></div>:null}
  {phase==='paid'?<p>예약이 확정됐습니다. 거래 상세에서 인수 장소와 시간을 확인해 주세요.</p>:null}

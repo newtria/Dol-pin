@@ -30,7 +30,7 @@ test('renaming an account preserves region and language already stored for it',a
   await borrower.page.getByLabel('새 닉네임',{exact:true}).fill('변경한 닉네임');
   await borrower.page.getByRole('button',{name:'닉네임 변경',exact:true}).click();
   await expect(borrower.page.getByRole('status')).toContainText('닉네임을 변경했습니다.');
-  await expect(borrower.page.getByText('변경한 닉네임',{exact:true})).toBeVisible();
+  await expect(borrower.page.getByRole('heading',{name:'변경한 닉네임님',exact:true})).toBeVisible();
   const saved=await control(request,'profile-preferences',{tag:f.tag});
   expect(saved).toMatchObject({nickname:'변경한 닉네임',region:'서울',locale:'ja'});
   expect(borrower.errors).toEqual([]);
@@ -44,7 +44,7 @@ test('a general inquiry reaches the operator and its notification opens the actu
  try{
   await borrower.page.goto('/support');
   const description='기기 알림을 받지 못하고 있습니다. 설정 방법을 확인해 주세요.';
-  await borrower.page.getByLabel('일반 문의',{exact:true}).fill(description);
+  await borrower.page.getByRole('textbox',{name:'일반 문의',exact:true}).fill(description);
   await borrower.page.getByRole('button',{name:'문의 접수',exact:true}).click();
   await expect(borrower.page.getByRole('status')).toContainText('문의를 접수했습니다.');
   await expect(borrower.page.getByText(description,{exact:true})).toBeVisible();

@@ -18,6 +18,7 @@ const itemColumns = 'id,lender_id,concert_id,category,title,description,photos,d
 export type RentalCursor = {createdAt:string;id:string};
 export type ConcertCursor = {date:string;id:string};
 export type Concert = Database['public']['Tables']['concerts']['Row'];
+export type ItemFilter = {concertId?:string;category?:string;search?:string;pickupArea?:string;startsAt?:string;endsAt?:string};
 
 function value<T>(result: {data: T; error: {message: string; code?:string} | null}): T {
   if (result.error) throw Object.assign(new Error(result.error.code==='23P01' ? '같은 기간에 이미 수락된 예약이 있습니다.' : result.error.message), {code: result.error.code});
@@ -83,14 +84,35 @@ export function createApi(client: Client) {
       const rows=value(await query.limit(51))??[];const last=rows[49];
       return {rows:rows.slice(0,50),nextCursor:rows.length>50?{date:last.concert_date,id:last.id}:undefined};
     },
-    async items(filter: {concertId?: string; category?: string; search?: string},cursor?:RentalCursor) {
-      let query = client.from('rental_items').select(itemColumns).eq('status', 'active').order('created_at', {ascending: false}).order('id',{ascending:false});
-      if (filter.concertId) query = query.eq('concert_id', filter.concertId);
-      if (filter.category) query = query.eq('category', filter.category);
-      if (filter.search?.trim()) query = query.ilike('title', `%${filter.search.trim().replace(/[\\%_]/g, '\\$&')}%`);
-      if(cursor)query=query.or(`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`);
-      const rows=value(await query.limit(51))??[];const last=rows[49];
-      return {rows:rows.slice(0,50).map(item=>withProductPhotos(client,item)),nextCursor:rows.length>50&&last.created_at?{createdAt:last.created_at,id:last.id}:undefined};
+    async items(filter:ItemFilter,cursor?:RentalCursor) {
+      // A single database query applies the public visibility, period and area
+      // conditions before LIMIT. Filtering a fetched page would hide matches.
+      const result=await client.rpc('search_rental_items',{
+        p_concert_id:filter.concertId||null,p_category:filter.category?.trim()||null,
+        p_search:filter.search?.trim()||null,p_pickup_area:filter.pickupArea?.trim()||null,
+        p_starts_at:filter.startsAt||null,p_ends_at:filter.endsAt||null,
+        p_before_created_at:cursor?.createdAt??null,p_before_id:cursor?.id??null,
+      });
+      let rows:Item[];
+      // A rolling deployment may briefly serve the previous schema. Preserve
+      // ordinary browsing only for a missing RPC; never silently drop dates or
+      // location filters, and never hide a permission/availability failure.
+      if(result.error?.code==='PGRST202'&&!filter.pickupArea?.trim()&&!filter.startsAt&&!filter.endsAt) {
+        if(cursor&&(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cursor.id)
+          ||(cursor.createdAt!=='-infinity'&&(!/^\d{4}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})$/.test(cursor.createdAt)||!Number.isFinite(Date.parse(cursor.createdAt))))))
+          throw new ApiRequestError({code:'INVALID_REQUEST'});
+        let query=client.from('rental_items').select(itemColumns).eq('status','active')
+          .order('created_at',{ascending:false,nullsFirst:false}).order('id',{ascending:false});
+        if(filter.concertId)query=query.eq('concert_id',filter.concertId);
+        if(filter.category)query=query.eq('category',filter.category);
+        if(filter.search?.trim())query=query.ilike('title',`%${filter.search.trim().replace(/[\\%_]/g,'\\$&')}%`);
+        if(cursor)query=cursor.createdAt==='-infinity'?query.is('created_at',null).lt('id',cursor.id)
+          :query.or(`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id}),created_at.is.null`);
+        rows=value(await query.limit(51))??[];
+      } else rows=value(result)??[];
+      const last=rows[49];
+      return {rows:rows.slice(0,50).map(item=>withProductPhotos(client,item)),
+        nextCursor:rows.length>50&&last?{createdAt:last.created_at??'-infinity',id:last.id}:undefined};
     },
     async recoverPayment(reservationId:string) {
       return invoke('toss-payment',{action:'recover',reservationId});

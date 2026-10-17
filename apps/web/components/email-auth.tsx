@@ -1,6 +1,7 @@
 'use client';
 
 import {useRef, useState, type FormEvent} from 'react';
+import {authCallbackUrl} from './auth-return';
 import Link from 'next/link';
 import {useMutation} from '@tanstack/react-query';
 import {emailLoginInput, emailSignupInput} from '@dolpin/contracts/email-auth';
@@ -13,7 +14,7 @@ import {Field, FieldError, FieldGroup, FieldLabel} from '@/components/ui/field';
 type Mode = 'login' | 'signup';
 type Credentials = {email: string; password: string; mode: Mode};
 
-export function EmailAuth({disabled, onBusyChange}: {disabled: boolean; onBusyChange: (busy: boolean) => void}) {
+export function EmailAuth({disabled, onBusyChange, returnTo='/account'}: {disabled: boolean; onBusyChange: (busy: boolean) => void; returnTo?:string}) {
   const {client} = useApi();
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
@@ -27,7 +28,7 @@ export function EmailAuth({disabled, onBusyChange}: {disabled: boolean; onBusyCh
   const terms=process.env.NEXT_PUBLIC_TERMS_URL,privacy=process.env.NEXT_PUBLIC_PRIVACY_URL;
   // A ref closes the double-submit window before React renders isPending.
   const submitting = useRef(false);
-  const redirectTo = () => `${window.location.origin}/auth/callback`;
+  const redirectTo = () => authCallbackUrl(returnTo);
   function settled() {submitting.current = false; onBusyChange(false);}
 
   const auth = useMutation({
@@ -100,13 +101,13 @@ export function EmailAuth({disabled, onBusyChange}: {disabled: boolean; onBusyCh
       <Field data-invalid={!!errors.email}><FieldLabel htmlFor="email">이메일</FieldLabel><Input id="email" name="email" type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} placeholder="name@example.com" value={email} onChange={event => changeEmail(event.target.value)} disabled={busy} aria-invalid={!!errors.email} aria-describedby={errors.email ? 'email-error' : undefined}/><FieldError id="email-error">{errors.email}</FieldError></Field>
       <Field data-invalid={!!errors.password}><FieldLabel htmlFor="password">비밀번호</FieldLabel><Input id="password" name="password" type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} placeholder={mode === 'signup' ? '8자 이상 입력해 주세요' : '비밀번호를 입력해 주세요'} value={password} onChange={event => setPassword(event.target.value)} disabled={busy} aria-invalid={!!errors.password} aria-describedby={errors.password ? 'password-error' : undefined}/><FieldError id="password-error">{errors.password}</FieldError></Field>
       {mode === 'signup' ? <Field data-invalid={!!errors.confirmation}><FieldLabel htmlFor="confirmation">비밀번호 확인</FieldLabel><Input id="confirmation" name="confirmation" type="password" autoComplete="new-password" value={confirmation} onChange={event => setConfirmation(event.target.value)} disabled={busy} aria-invalid={!!errors.confirmation} aria-describedby={errors.confirmation ? 'confirmation-error' : undefined}/><FieldError id="confirmation-error">{errors.confirmation}</FieldError></Field> : null}
-      {mode==='signup'?terms&&privacy?<><p><a href={terms} target="_blank" rel="noreferrer">이용약관</a> · <a href={privacy} target="_blank" rel="noreferrer">개인정보 처리 안내</a></p><label><input type="checkbox" checked={consented} onChange={e=>setConsented(e.target.checked)}/> 확인하고 가입에 동의합니다. 이메일 확인 후 거래 이용 동의를 저장합니다.</label></>:<p>가입 안내를 준비하고 있습니다. 잠시 후 다시 시도해 주세요.</p>:null}
+      {mode==='signup'?terms&&privacy?<><p className="text-sm underline underline-offset-4"><a href={terms} target="_blank" rel="noreferrer">이용약관</a> · <a href={privacy} target="_blank" rel="noreferrer">개인정보 처리 안내</a></p><label className="flex items-start gap-3 rounded-xl bg-muted p-3 text-sm leading-6"><input className="mt-1 size-4 shrink-0" type="checkbox" checked={consented} onChange={e=>setConsented(e.target.checked)}/> 이용약관과 개인정보 처리 안내를 확인하고 가입에 동의합니다.</label></>:<p>가입 안내를 준비하고 있습니다. 잠시 후 다시 시도해 주세요.</p>:null}
       <Button type="submit" disabled={busy||(mode==='signup'&&(!consented||!terms||!privacy))}>{auth.isPending ? '처리 중' : mode === 'login' ? '이메일 로그인' : '가입하기'}</Button>
     </FieldGroup></form>
     <Failure error={auth.error ?? resend.error}/>
     {notice ? <p role="status" className="text-sm leading-6">{notice}</p> : null}
     {pendingEmail ? <Button type="button" variant="outline" disabled={busy} onClick={resendConfirmation}>{resend.isPending ? '메일 보내는 중' : '확인 메일 다시 받기'}</Button> : null}
     <Button type="button" variant="link" disabled={busy} onClick={switchMode}>{mode === 'login' ? '처음이신가요? 이메일로 가입하기' : '이미 계정이 있나요? 로그인하기'}</Button>
-    <Link href="/auth/password">비밀번호를 잊으셨나요?</Link>
+    <Link className="text-center text-sm text-muted-foreground underline underline-offset-4" href={`/auth/password?returnTo=${encodeURIComponent(returnTo)}`}>비밀번호를 잊으셨나요?</Link>
   </div>;
 }

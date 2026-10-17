@@ -1,3 +1,5 @@
+/// <reference types="node" />
+import {Buffer} from 'node:buffer';
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 
 function releaseUrl(key: string): void {

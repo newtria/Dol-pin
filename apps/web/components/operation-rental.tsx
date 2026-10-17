@@ -21,7 +21,7 @@ export function OperationRental({id}:{id:string}){
  const terms=r?rentalTerms(r.terms_snapshot):null;
  const messages=query.data?.pages.flatMap(page=>page.messages)??[];
  const name=(userId:string|null)=>userId?(data?.participants.find(user=>user.id===userId)?.nickname??'이전 사용자'):'운영팀';
- return <section className="flex flex-col gap-4 rounded border p-5" aria-label="운영 거래 조사">
+ return <section className="flex flex-col gap-4 rounded-2xl border bg-card p-5" aria-label="운영 거래 조사">
   <h2 className="text-xl font-semibold">거래 조사</h2><p className="break-all">{id}</p><Failure error={query.error??photo.error}/>
   {query.isPending?<p>거래 기록을 확인하고 있습니다.</p>:null}
   {data&&r?<>
@@ -34,16 +34,16 @@ export function OperationRental({id}:{id:string}){
    <p>인수 확인: 차용자 {data.pickup.borrowerConfirmed?'확인':'미확인'} / 대여자 {data.pickup.lenderConfirmed?'확인':'미확인'}</p>
    {r.return_photo?<Button variant="outline" disabled={photo.isPending} onClick={()=>photo.mutate(null)}>제출된 반납 사진 보기</Button>:null}
    <h3 className="font-semibold">분쟁·판정</h3>
-   {data.disputes.map(dispute=><article key={dispute.id} className="rounded border p-3"><p>{name(dispute.reporter_id)} · {dispute.resolved_at?'종결':'검토 중'}</p><p className="whitespace-pre-wrap">{dispute.reason}</p>{dispute.evidence_paths.map((path,index)=><Button key={path} variant="outline" disabled={photo.isPending} onClick={()=>photo.mutate(path)}>증빙 {index+1} 보기</Button>)}</article>)}
+   {data.disputes.map(dispute=><article key={dispute.id} className="rounded-xl border bg-card p-3"><p>{name(dispute.reporter_id)} · {dispute.resolved_at?'종결':'검토 중'}</p><p className="whitespace-pre-wrap">{dispute.reason}</p>{dispute.evidence_paths.map((path,index)=><Button key={path} variant="outline" disabled={photo.isPending} onClick={()=>photo.mutate(path)}>증빙 {index+1} 보기</Button>)}</article>)}
    {data.resolutions.map((result,index)=><p key={index} className="whitespace-pre-wrap">판정 반환액 {formatWon(result.refund_amount)} · {result.reason}{result.created_at?` · ${formatKoreaTime(result.created_at)}`:''}</p>)}
    {photo.data&&!photo.isPending&&!photo.isError?<img src={photo.data} alt="거래 조사 증빙" className="max-h-96 max-w-full object-contain" referrerPolicy="no-referrer"/>:null}
    <h3 className="font-semibold">환불·지급 기록</h3>
-   {data.legacyPayments.map(payment=><article key={payment.payment_reference} className="rounded border p-3"><p>과거 결제 대조 · {payment.resolved_at?'검토 기록 있음':'운영 확인 필요'}</p><p>{verificationLabels[payment.reason_code]??'결제 내역 확인 필요'} · {formatKoreaTime(payment.created_at)}</p><p className="break-all">결제 참조 {payment.payment_reference}</p><p>결제 {payment.amount} {payment.currency} · 반환 {payment.refunded} {payment.currency}</p></article>)}
+   {data.legacyPayments.map(payment=><article key={payment.payment_reference} className="rounded-xl border bg-card p-3"><p>과거 결제 대조 · {payment.resolved_at?'검토 기록 있음':'운영 확인 필요'}</p><p>{verificationLabels[payment.reason_code]??'결제 내역 확인 필요'} · {formatKoreaTime(payment.created_at)}</p><p className="break-all">결제 참조 {payment.payment_reference}</p><p>결제 {payment.amount} {payment.currency} · 반환 {payment.refunded} {payment.currency}</p></article>)}
    {data.operations.map(operation=><p key={operation.id}>{moneyLabels[operation.kind]??operation.kind} {formatWon(operation.amount)} · {moneyLabels[operation.status]??operation.status}{operation.review_required_at?' · 운영 확인 필요':''}</p>)}
    {data.payouts.map(payout=><p key={payout.id}>대여료 지급 {formatWon(payout.net_amount)} · {moneyLabels[payout.status]??payout.status}</p>)}
    <details><summary>거래 상태 이력</summary>{data.events.map(event=><p key={event.id}>{formatKoreaTime(event.created_at)} · {rentalStatusLabels[event.from_status??'']??'시작'} → {rentalStatusLabels[event.to_status]??event.to_status}</p>)}</details>
    <h3 className="font-semibold">당사자 메시지 (최신순)</h3>
-   {messages.map(message=><article key={message.id} className="rounded border p-3"><p>{name(message.sender_id)} · {formatKoreaTime(message.created_at)}</p><p className="whitespace-pre-wrap">{message.message}</p></article>)}
+   {messages.map(message=><article key={message.id} className="rounded-xl border bg-card p-3"><p>{name(message.sender_id)} · {formatKoreaTime(message.created_at)}</p><p className="whitespace-pre-wrap">{message.message}</p></article>)}
    {query.hasNextPage?<Button variant="outline" disabled={query.isFetchingNextPage} onClick={()=>void query.fetchNextPage()}>이전 메시지</Button>:null}
   </>:null}
   <Button variant="outline" disabled={query.isFetching} onClick={()=>void query.refetch()}>거래 다시 조회</Button>

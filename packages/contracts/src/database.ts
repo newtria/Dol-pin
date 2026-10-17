@@ -1190,6 +1190,19 @@ export type Database = {
       }
     }
     Functions: {
+      search_rental_items: {
+        Args: {
+          p_concert_id?: string | null
+          p_category?: string | null
+          p_search?: string | null
+          p_pickup_area?: string | null
+          p_starts_at?: string | null
+          p_ends_at?: string | null
+          p_before_created_at?: string | null
+          p_before_id?: string | null
+        }
+        Returns: Omit<Database['public']['Tables']['rental_items']['Row'], 'pickup_note' | 'pickup_location' | 'imei'>[]
+      }
       own_item_pickup_note: {
         Args: { p_item_id: string }
         Returns: string | null
