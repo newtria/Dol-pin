@@ -50,6 +50,8 @@ jobs:
           npm run test:mobile-errors
           npm run test:email-auth
           npm run test:rental-ux
+          npm run test:catalogue
+          npm run test:reservation-context
           npm run test:recovery:local
           npm run test:finance
       - name: Build consumer web

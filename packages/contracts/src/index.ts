@@ -1,6 +1,7 @@
 import { z } from 'zod';
 export type { Database } from './database';
 export {rentalPeriodConflict, rentalNextStep, type RentalNextStep, type RentalStepInput} from './rental-ux.ts';
+export {reservationInitialPeriod, reservationContextKey, reservationRouteValue, type ReservationPeriodSource} from './reservation-context.ts';
 
 export const categories = ['lightstick', 'phone', 'camera', 'slogan', 'costume', 'etc'] as const;
 export const categoryLabels: Record<(typeof categories)[number], string> = {

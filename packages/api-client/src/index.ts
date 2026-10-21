@@ -61,8 +61,19 @@ export function createApi(client: Client) {
     async rental(id:string) {
       return value(await client.from('reservations').select('*, item:rental_items!reservations_item_id_fkey(title)').eq('id',id).single());
     },
-    async requestRental(input:Database['public']['Functions']['request_rental']['Args']) {
-      const result=await client.rpc('request_rental',input);
+    async requestRental(input:Database['public']['Functions']['request_rental']['Args'],expectedOwner?:string) {
+      let accessToken:string|undefined;
+      if(expectedOwner!==undefined) {
+        const {data,error}=await client.auth.getSession();
+        if(error||data.session?.user.id!==expectedOwner||!data.session.access_token)
+          throw new ApiRequestError({code:'AUTH_REQUIRED'});
+        accessToken=data.session.access_token;
+      }
+      const command=client.rpc('request_rental',input);
+      // Supabase resolves auth again while sending. Pin the journal owner's token
+      // so an account change during that await cannot create another user's rental.
+      if(accessToken)command.setHeader('Authorization',`Bearer ${accessToken}`);
+      const result=await command;
       if(result.error) {
         // PostgreSQL errors are definitive transaction failures; transport,
         // gateway and ambiguous responses retain the recovery request.
@@ -93,23 +104,11 @@ export function createApi(client: Client) {
         p_starts_at:filter.startsAt||null,p_ends_at:filter.endsAt||null,
         p_before_created_at:cursor?.createdAt??null,p_before_id:cursor?.id??null,
       });
-      let rows:Item[];
-      // A rolling deployment may briefly serve the previous schema. Preserve
-      // ordinary browsing only for a missing RPC; never silently drop dates or
-      // location filters, and never hide a permission/availability failure.
-      if(result.error?.code==='PGRST202'&&!filter.pickupArea?.trim()&&!filter.startsAt&&!filter.endsAt) {
-        if(cursor&&(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cursor.id)
-          ||(cursor.createdAt!=='-infinity'&&(!/^\d{4}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})$/.test(cursor.createdAt)||!Number.isFinite(Date.parse(cursor.createdAt))))))
-          throw new ApiRequestError({code:'INVALID_REQUEST'});
-        let query=client.from('rental_items').select(itemColumns).eq('status','active')
-          .order('created_at',{ascending:false,nullsFirst:false}).order('id',{ascending:false});
-        if(filter.concertId)query=query.eq('concert_id',filter.concertId);
-        if(filter.category)query=query.eq('category',filter.category);
-        if(filter.search?.trim())query=query.ilike('title',`%${filter.search.trim().replace(/[\\%_]/g,'\\$&')}%`);
-        if(cursor)query=cursor.createdAt==='-infinity'?query.is('created_at',null).lt('id',cursor.id)
-          :query.or(`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id}),created_at.is.null`);
-        rows=value(await query.limit(51))??[];
-      } else rows=value(result)??[];
+      // Table RLS also permits owners to inspect moderated items. It cannot
+      // substitute for the public catalogue's visibility rules when the RPC
+      // is missing. Require the migrated schema for every catalogue request.
+      if(result.error?.code==='PGRST202')throw new ApiRequestError({code:'SERVICE_UNAVAILABLE'});
+      const rows=value(result)??[];
       const last=rows[49];
       return {rows:rows.slice(0,50).map(item=>withProductPhotos(client,item)),
         nextCursor:rows.length>50&&last?{createdAt:last.created_at??'-infinity',id:last.id}:undefined};

@@ -53,7 +53,8 @@ BEGIN
  IF target=auth.uid() OR NOT EXISTS(SELECT 1 FROM public.users WHERE id=target) THEN RAISE EXCEPTION '신고 대상을 확인해 주세요.' USING ERRCODE='22023'; END IF;
  IF p_reservation_id IS NOT NULL THEN
   SELECT * INTO rental FROM public.reservations WHERE id=p_reservation_id AND auth.uid() IN (borrower_id,lender_id);
-  IF NOT FOUND OR target<>CASE WHEN rental.borrower_id=auth.uid() THEN rental.lender_id ELSE rental.borrower_id END
+  IF NOT FOUND THEN RAISE EXCEPTION '거래에 접근할 수 없습니다.' USING ERRCODE='42501'; END IF;
+  IF target IS DISTINCT FROM (CASE WHEN rental.borrower_id=auth.uid() THEN rental.lender_id ELSE rental.borrower_id END)
   OR (p_item_id IS NOT NULL AND p_item_id<>rental.item_id) THEN RAISE EXCEPTION '거래에 접근할 수 없습니다.' USING ERRCODE='42501'; END IF;
  ELSE PERFORM public.assert_active_account(); END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(auth.uid()::text||target::text||coalesce(p_item_id::text,'')||coalesce(p_reservation_id::text,''),2));

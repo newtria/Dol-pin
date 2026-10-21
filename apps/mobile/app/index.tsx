@@ -10,19 +10,24 @@ import {DateField} from '../src/date-field';
 import {Page, Field, ErrorText, Button, Chip, EmptyState, LoadingState, ValidationText, s, colors} from '../src/ui';
 
 export default function Explore() {
+  const resetVersion = useExploreState(state => state.resetVersion);
+  return <ExploreCatalogue key={resetVersion}/>;
+}
+
+function ExploreCatalogue() {
   const filter = useExploreState();
   const [filtersOpen,setFiltersOpen]=useState(false);
   const [search,setSearch]=useState(filter.search);
   const [pickupArea,setPickupArea]=useState(filter.pickupArea);
   const [period,setPeriod]=useState({startsAt:filter.startsAt,endsAt:filter.endsAt});
   const [periodError,setPeriodError]=useState<string>();
-  useEffect(()=>{const timer=setTimeout(()=>filter.set({search}),300);return()=>clearTimeout(timer);},[search]);
+  useEffect(()=>{const timer=setTimeout(()=>filter.set({search},filter.resetVersion),300);return()=>clearTimeout(timer);},[search,filter.set,filter.resetVersion]);
   const concerts=useInfiniteQuery({queryKey:['concerts'],queryFn:({pageParam})=>api.concerts(pageParam),initialPageParam:undefined as ConcertCursor|undefined,getNextPageParam:page=>page.nextCursor});
-  const stalePeriod=filter.startsAt&&filter.endsAt?rentalPeriodConflict(filter.startsAt,filter.endsAt,[]):null;
-  const items=useInfiniteQuery({queryKey:['items',filter.concertId,filter.category,filter.search,filter.pickupArea,filter.startsAt,filter.endsAt],queryFn:({pageParam})=>api.items({...filter,startsAt:filter.startsAt?koreaTime(filter.startsAt):undefined,endsAt:filter.endsAt?koreaTime(filter.endsAt):undefined},pageParam),initialPageParam:undefined as RentalCursor|undefined,getNextPageParam:page=>page.nextCursor,enabled:!stalePeriod});
-  const rows=items.data?.pages.flatMap(page=>page.rows)??[];
-  const hasFilters=!!(filter.concertId||filter.category||filter.search||filter.pickupArea||filter.startsAt);
-  function reset(){filter.clear();setSearch('');setPickupArea('');setPeriod({startsAt:'',endsAt:''});setPeriodError(undefined);}
+  const stalePeriod=filter.startsAt||filter.endsAt?rentalPeriodConflict(filter.startsAt,filter.endsAt,[]):null;
+  const items=useInfiniteQuery({queryKey:['items',filter.concertId,filter.category,filter.search,filter.pickupArea,filter.startsAt,filter.endsAt],queryFn:({pageParam})=>api.items({concertId:filter.concertId,category:filter.category,search:filter.search,pickupArea:filter.pickupArea,startsAt:filter.startsAt?koreaTime(filter.startsAt):undefined,endsAt:filter.endsAt?koreaTime(filter.endsAt):undefined},pageParam),initialPageParam:undefined as RentalCursor|undefined,getNextPageParam:page=>page.nextCursor,enabled:!stalePeriod});
+  const rows=stalePeriod?[]:items.data?.pages.flatMap(page=>page.rows)??[];
+  const hasFilters=!!(filter.concertId||filter.category||filter.search||filter.pickupArea||filter.startsAt||filter.endsAt);
+  function reset(){filter.clear();}
   function apply(){if(period.startsAt||period.endsAt){const parsed=rentalPeriodInput.safeParse(period);if(!parsed.success){setPeriodError(parsed.error.issues[0]?.message??'빌릴 날짜와 반납 날짜를 확인해 주세요.');return;}const conflict=rentalPeriodConflict(period.startsAt,period.endsAt,[]);if(conflict){setPeriodError(conflict);return;}}filter.set({...period,pickupArea:pickupArea.trim()});setPeriodError(undefined);setFiltersOpen(false);}
   return <Page><FlatList data={rows} keyExtractor={item => item.id} contentContainerStyle={s.content}
     onRefresh={() => {if(!stalePeriod)void items.refetch();}} refreshing={items.isRefetching}
@@ -39,10 +44,10 @@ export default function Explore() {
         <Chip label="전체 물품" selected={!filter.category} onPress={() => filter.set({category: undefined})}/>
         {categories.map(c => <Chip key={c} label={categoryLabels[c]} selected={filter.category === c} onPress={() => filter.set({category: c})}/>)}</ScrollView>
       {stalePeriod?<View style={s.card}><ValidationText error={stalePeriod}/><Button label="날짜 다시 선택" secondary onPress={()=>setFiltersOpen(true)}/></View>:null}
-      <ErrorText error={items.error ?? concerts.error} retrying={items.isFetching || concerts.isFetching} onRetry={()=>{void items.refetch();void concerts.refetch();}}/>
+      <ErrorText error={items.error ?? concerts.error} retrying={items.isFetching || concerts.isFetching} onRetry={()=>{if(!stalePeriod)void items.refetch();void concerts.refetch();}}/>
       <View style={[s.row,{justifyContent:'space-between'}]}><Text style={s.heading}>{hasFilters?'조건에 맞는 물품':'빌릴 수 있는 물품'}</Text>{hasFilters?<Pressable accessibilityRole="button" onPress={reset} style={{paddingVertical:10}}><Text style={{color:colors.primary}}>조건 초기화</Text></Pressable>:null}</View>
     </View>}
-    ListFooterComponent={items.hasNextPage?<Button label={items.isFetchingNextPage?'불러오는 중':'물품 더 보기'} secondary disabled={items.isFetching} onPress={()=>{void items.fetchNextPage();}}/>:null}
+    ListFooterComponent={!stalePeriod&&items.hasNextPage?<Button label={items.isFetchingNextPage?'불러오는 중':'물품 더 보기'} secondary disabled={items.isFetching} onPress={()=>{void items.fetchNextPage();}}/>:null}
     ItemSeparatorComponent={() => <View style={{height: 12}}/>}
     ListEmptyComponent={stalePeriod ? null : items.isPending ? <LoadingState label="빌릴 수 있는 물품을 찾고 있어요"/> : items.isError ? null : <EmptyState title={hasFilters?'이 조건의 물품이 없어요':'첫 물품을 기다리고 있어요'} body={hasFilters?'지역을 넓히거나 날짜·공연 조건을 바꾸면 다른 물품을 찾을 수 있어요.':'공연에 가져갈 물품을 등록하고 필요한 사람에게 빌려주세요.'} action={hasFilters?'조건 초기화':'내 물품 등록'} onAction={hasFilters?reset:()=>router.push('/items/new')}/>}
     renderItem={({item}) => {const estimate=filter.startsAt&&filter.endsAt?rentalEstimate(filter.startsAt,filter.endsAt,item.daily_price,item.deposit):null;return <Pressable accessibilityRole="button" accessibilityLabel={`${item.title}, ${estimate?`${estimate.days}일 대여료 ${formatWon(estimate.fee)}, 보증금 포함 ${formatWon(estimate.total)}`:`하루 ${formatWon(item.daily_price)}`}, ${item.pickup_area||'만남 지역 미등록'}`} onPress={() => router.push(`/items/${item.id}`)} style={[s.card, s.row,{padding:12}]}>

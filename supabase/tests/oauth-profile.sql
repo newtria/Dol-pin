@@ -11,7 +11,15 @@ DO $$ DECLARE profile public.users%ROWTYPE; BEGIN
  IF profile.id <> auth.uid() OR profile.phone IS NOT NULL OR profile.identity_verified IS DISTINCT FROM false THEN
    RAISE EXCEPTION 'OAuth profile fabricated a phone or identity verification';
  END IF;
- UPDATE public.users SET nickname='OAuth renamed' WHERE id=auth.uid();
+ profile:=public.update_my_profile('OAuth renamed');
+ IF profile.nickname IS DISTINCT FROM 'OAuth renamed' THEN
+  RAISE EXCEPTION 'profile command did not persist nickname';
+ END IF;
+ BEGIN
+  UPDATE public.users SET nickname='Direct write' WHERE id=auth.uid();
+  RAISE EXCEPTION 'client bypassed profile command';
+ EXCEPTION WHEN insufficient_privilege THEN NULL;
+ END;
  BEGIN
   UPDATE public.users SET phone='forged-phone' WHERE id=auth.uid();
   RAISE EXCEPTION 'client forged phone';

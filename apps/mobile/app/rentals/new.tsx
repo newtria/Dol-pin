@@ -1,7 +1,7 @@
 import {pendingRentals} from '../../src/pending-rentals';
 import {DateField} from '../../src/date-field';
 import {type RentalRequest} from '@dolpin/api-client';
-import {useCallback,useEffect,useRef,useState} from 'react';
+import {useCallback,useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {ScrollView,Text,View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {router,useFocusEffect,useLocalSearchParams} from 'expo-router';
@@ -9,21 +9,24 @@ import {randomUUID} from 'expo-crypto';
 import {Controller,useForm,useWatch} from 'react-hook-form';
 import {zodResolver} from '@hookform/resolvers/zod';
 import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
-import {rentalEstimate,rentalPeriodInput,rentalPeriodConflict,koreaTime,formatWon,formatKoreaTime} from '@dolpin/contracts';
-import {api} from '../../src/client';
+import {rentalEstimate,rentalPeriodInput,rentalPeriodConflict,koreaTime,formatWon,formatKoreaTime,reservationInitialPeriod,reservationContextKey,reservationRouteValue,type ReservationPeriodSource} from '@dolpin/contracts';
+import {api,client} from '../../src/client';
 import {useRentalDrafts} from '../../src/rental-drafts';
 import {useExploreState} from '../../src/state';
 import {beginSignIn} from '../../src/auth-return';
 import {useSession} from '../../src/session';
 import {Button,ValidationText,ErrorText,Section,EmptyState,LoadingState,s,colors} from '../../src/ui';
-function validLocal(value:string|undefined){try{if(value){koreaTime(value);return value.trim().replace(' ','T');}}catch{}return '';}
 export default function RequestRental() {
- const {session}=useSession();const {itemId}=useLocalSearchParams<{itemId:string}>();
- return <RentalRequestContents key={`${session?.user.id??'signed-out'}:${itemId}`}/>;
+ const {session}=useSession();const params=useLocalSearchParams<{itemId?:string|string[];startsAt?:string|string[];endsAt?:string|string[]}>();
+ const itemId=reservationRouteValue(params.itemId);
+ const routePeriod={startsAt:reservationRouteValue(params.startsAt),endsAt:reservationRouteValue(params.endsAt)};
+ if(!itemId)return <ScrollView contentContainerStyle={s.content}><EmptyState title="예약할 물품을 확인해 주세요" body="물품 링크가 올바르지 않습니다. 물품을 다시 선택해 주세요." action="물품 찾기" onAction={()=>router.replace('/')}/></ScrollView>;
+ return <RentalRequestContents key={reservationContextKey(session?.user.id,itemId,routePeriod)} itemId={itemId} routePeriod={routePeriod}/>;
 }
-function RentalRequestContents(){
- const {itemId,startsAt,endsAt}=useLocalSearchParams<{itemId:string;startsAt?:string;endsAt?:string}>(); const {session,ready}=useSession();
+function RentalRequestContents({itemId,routePeriod}:{itemId:string;routePeriod:ReservationPeriodSource}){
+ const {session,ready}=useSession();
  const mounted=useRef(false);const focused=useRef(false);
+ useLayoutEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
  useFocusEffect(useCallback(()=>{
   focused.current=true;
   return ()=>{focused.current=false;};
@@ -34,38 +37,42 @@ function RentalRequestContents(){
  const consent=useQuery({queryKey:['consent',session?.user.id],queryFn:api.consentStatus,enabled:!!session});
  const availability=useQuery({queryKey:['availability',itemId],queryFn:()=>api.itemAvailability(itemId)});
  const filter=useExploreState.getState();
- const form=useForm({resolver:zodResolver(rentalPeriodInput),defaultValues:{startsAt:validLocal(startsAt)||validLocal(draft?.startsAt)||validLocal(filter.startsAt),endsAt:validLocal(endsAt)||validLocal(draft?.endsAt)||validLocal(filter.endsAt)}});
+ const form=useForm({resolver:zodResolver(rentalPeriodInput),defaultValues:reservationInitialPeriod(routePeriod,draft,filter)});
  const period=useWatch({control:form.control});
  const estimate=item.data?rentalEstimate(period.startsAt??'',period.endsAt??'',item.data.daily_price,item.data.deposit):null;
  const conflict=period.startsAt&&period.endsAt?rentalPeriodConflict(period.startsAt,period.endsAt,availability.data??[],item.data?.available_from,item.data?.available_to):null;
  const recoveryReady=!!session&&recovery?.owner===session.user.id&&recovery.item===itemId;
  const saved=recoveryReady?recovery.request:null;
  useEffect(()=>{
-  let active=true;mounted.current=true;setRecovery(undefined);setRecoveryError(undefined);
+  let active=true;setRecovery(undefined);setRecoveryError(undefined);
   if(session)void pendingRentals.read(session.user.id,itemId).then(request=>{
     if(active)setRecovery({owner:session.user.id,item:itemId,request});
   }).catch(error=>{if(active)setRecoveryError(error);});
-  return ()=>{active=false;mounted.current=false;};
+  return ()=>{active=false;};
  },[session?.user.id,itemId,recoveryAttempt]);
  const request=useMutation({mutationFn:async(v:{startsAt:string;endsAt:string})=>{
-  if(!session||!recoveryReady)throw new Error('저장된 요청을 확인하고 있습니다.');
-  if(!saved){const conflict=rentalPeriodConflict(v.startsAt,v.endsAt,availability.data??[],item.data?.available_from,item.data?.available_to);if(conflict)throw new Error(conflict);}
+  if(!mounted.current||!focused.current||!ready||!session||!recoveryReady)throw new Error('저장된 요청을 확인하고 있습니다.');
+  if(!saved&&item.data?.status!=='active')throw new Error('현재 새 예약을 받지 않는 물품입니다. 다른 물품을 선택해 주세요.');
   if(!saved&&!item.data?.updated_at)throw new Error('상품을 다시 확인해 주세요.');
+  if(!saved&&(item.data?.lender_id===session.user.id||!availability.isSuccess||!profile.data||!consent.data?.accepted||profile.isError||consent.isError))throw new Error('상품을 다시 확인해 주세요.');
+  if(!saved){const conflict=rentalPeriodConflict(v.startsAt,v.endsAt,availability.data!,item.data?.available_from,item.data?.available_to);if(conflict)throw new Error(conflict);}
   const owner=session.user.id;
   const input=saved??{p_item_id:itemId,p_starts_at:koreaTime(v.startsAt),p_ends_at:koreaTime(v.endsAt),p_item_version:item.data!.updated_at!,p_request_id:randomUUID()};
+  setRecoveryError(undefined);
   setRecovery({owner,item:itemId,request:input});
   try {return await pendingRentals.submit(owner,input,request=>{
    if(!mounted.current||!focused.current)throw new Error('저장된 요청을 확인하고 있습니다.');
-   return api.requestRental(request);
+   return api.requestRental(request,owner);
   });}
-  finally {
-   if(mounted.current){
-    const request=await pendingRentals.read(owner,itemId);
-    if(mounted.current)setRecovery({owner,item:itemId,request});
-   }
+  catch(error){
+   if(mounted.current)try{const request=await pendingRentals.read(owner,itemId);if(mounted.current)setRecovery({owner,item:itemId,request});}
+   catch(recoveryError){if(mounted.current)setRecoveryError(recoveryError);}
+   throw error;
   }
- },onSuccess:r=>{
+ },onSuccess:async r=>{
   if(!mounted.current)return;
+  const {data,error}=await client.auth.getSession();
+  if(!mounted.current||error||data.session?.user.id!==session?.user.id)return;
   useRentalDrafts.getState().removeDraft(itemId);void queries.invalidateQueries({queryKey:['rentals']});
   if(focused.current)router.replace(`/rentals/${r.id}`);
  }});
@@ -79,8 +86,10 @@ function RentalRequestContents(){
  const own=!!session&&item.data?.lender_id===session.user.id;
  const blocked=!saved&&(own||!item.data||item.data.status!=='active'||availability.isPending||availability.isError||!!conflict||!!session&&(profile.isPending||consent.isPending||profile.isError||consent.isError));
  function submit(){
+  if(!mounted.current||!focused.current||!ready||request.isPending||!!session&&!recoveryReady||blocked)return;
   if(saved){request.mutate({startsAt:'',endsAt:''});return;}
   void form.handleSubmit(values=>{
+   if(!mounted.current||!focused.current)return;
    const latestConflict=rentalPeriodConflict(values.startsAt,values.endsAt,availability.data??[],item.data?.available_from,item.data?.available_to);
    if(latestConflict){form.setError('endsAt',{message:latestConflict});return;}
    if(blocked)return;

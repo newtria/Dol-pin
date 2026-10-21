@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import {Suspense, useState} from 'react';
+import {Suspense, useEffect, useRef, useState} from 'react';
 import {useInfiniteQuery} from '@tanstack/react-query';
 import {Search, MapPin, CalendarDays, ArrowRight, PackageOpen, RotateCcw, Camera, Smartphone, WandSparkles, Shirt, Flag, Shapes, ChevronDown} from 'lucide-react';
 import type {RentalCursor, ConcertCursor} from '@dolpin/api-client';
@@ -33,6 +33,8 @@ function Items() {
   const {api} = useApi();
   const filters = useExploreState();
   const {search, category, concertId, pickupArea, startsAt, endsAt, set} = filters;
+  const [resetVersion, setResetVersion] = useState(0);
+  function reset() {set(cleared); setResetVersion(version => version + 1);}
   const periodError = startsAt || endsAt ? rentalPeriodConflict(startsAt, endsAt, []) : null;
   const range = startsAt && endsAt && !periodError ? {startsAt: koreaTime(startsAt), endsAt: koreaTime(endsAt)} : {};
   const concerts = useInfiniteQuery({queryKey: ['concerts'], queryFn: ({pageParam}) => api.concerts(pageParam), initialPageParam: undefined as ConcertCursor | undefined, getNextPageParam: page => page.nextCursor});
@@ -57,7 +59,7 @@ function Items() {
     </section>
 
     <section aria-label="대여 조건 검색" className="surface">
-      <SearchForm key={JSON.stringify([search, pickupArea, startsAt, endsAt, concertId])} filters={filters} onApply={set}
+      <SearchForm key={JSON.stringify([resetVersion, search, pickupArea, startsAt, endsAt, concertId])} filters={filters} onApply={set}
         concerts={concertRows.map(concert => ({id: concert.id, title: concert.title, date: concert.concert_date}))}
         loadConcerts={concerts.hasNextPage ? () => {void concerts.fetchNextPage();} : undefined} concertsLoading={concerts.isFetching}/>
       <Failure error={concerts.error}/>
@@ -72,7 +74,7 @@ function Items() {
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h2 className="text-xl font-bold">{selectedConcert ? `${selectedConcert.title} 준비물` : hasFilters ? '조건에 맞는 물품' : '빌릴 수 있는 물품'}</h2><p className="mt-1 text-sm text-muted-foreground">{startsAt && !periodError ? '선택한 기간에 맞는 물품을 찾아요. 최종 예약 가능 여부는 요청할 때 다시 확인합니다.' : '날짜와 만남 지역을 선택하면 필요한 물품을 더 빠르게 찾을 수 있어요.'}</p></div>
-        {hasFilters ? <Button variant="ghost" size="sm" onClick={() => set(cleared)}><RotateCcw data-icon="inline-start" aria-hidden="true"/>조건 초기화</Button> : null}
+        {hasFilters ? <Button variant="ghost" size="sm" onClick={reset}><RotateCcw data-icon="inline-start" aria-hidden="true"/>조건 초기화</Button> : null}
       </div>
       <div aria-live="polite" className="sr-only">{!periodError && !items.isPending && !items.error ? `${rows.length}개 물품을 불러왔습니다.${items.hasNextPage ? ' 더 불러올 수 있습니다.' : ''}` : ''}</div>
       <Failure error={items.error}/>
@@ -90,8 +92,8 @@ function Items() {
           </div>
         </Link>;
       })}</div>
-      : !items.error ? <Empty className="min-h-72 border bg-card"><EmptyHeader><EmptyMedia variant="icon"><PackageOpen aria-hidden="true"/></EmptyMedia><EmptyTitle>{hasFilters ? '이 조건에 맞는 물품이 없어요' : '아직 등록된 물품이 없어요'}</EmptyTitle><EmptyDescription>{hasFilters ? '만남 지역을 넓히거나 다른 날짜로 찾아보세요. 선택한 조건은 위에서 바로 바꿀 수 있어요.' : '빌려줄 수 있는 공연 물품이 있다면 첫 물품을 등록해 보세요.'}</EmptyDescription></EmptyHeader><EmptyContent>{hasFilters ? <Button variant="outline" onClick={() => set(cleared)}>모든 물품 보기</Button> : <Button asChild><Link href="/items/new">물품 등록하기</Link></Button>}</EmptyContent></Empty> : <Button variant="outline" onClick={() => {void items.refetch();}}>물품 다시 불러오기</Button>}
-      {items.hasNextPage ? <Button variant="outline" className="mx-auto min-w-48" disabled={items.isFetching} onClick={() => {void items.fetchNextPage();}}>{items.isFetchingNextPage ? '물품을 불러오는 중…' : '물품 더 보기'}</Button> : null}
+      : !items.error ? <Empty className="min-h-72 border bg-card"><EmptyHeader><EmptyMedia variant="icon"><PackageOpen aria-hidden="true"/></EmptyMedia><EmptyTitle>{hasFilters ? '이 조건에 맞는 물품이 없어요' : '아직 등록된 물품이 없어요'}</EmptyTitle><EmptyDescription>{hasFilters ? '만남 지역을 넓히거나 다른 날짜로 찾아보세요. 선택한 조건은 위에서 바로 바꿀 수 있어요.' : '빌려줄 수 있는 공연 물품이 있다면 첫 물품을 등록해 보세요.'}</EmptyDescription></EmptyHeader><EmptyContent>{hasFilters ? <Button variant="outline" onClick={reset}>모든 물품 보기</Button> : <Button asChild><Link href="/items/new">물품 등록하기</Link></Button>}</EmptyContent></Empty> : <Button variant="outline" onClick={() => {void items.refetch();}}>물품 다시 불러오기</Button>}
+      {!periodError && items.hasNextPage ? <Button variant="outline" className="mx-auto min-w-48" disabled={items.isFetching} onClick={() => {void items.fetchNextPage();}}>{items.isFetchingNextPage ? '물품을 불러오는 중…' : '물품 더 보기'}</Button> : null}
     </section>
     <aside className="grid gap-5 rounded-2xl border px-6 py-5 text-sm sm:grid-cols-3" aria-label="대여 이용 순서">
       {[['01', '날짜와 장소 선택', '내 일정에 맞는 물품을 찾아요.'], ['02', '수락 후 결제', '상대가 수락하면 금액을 확인하고 결제해요.'], ['03', '만나서 수령·반납', '서로 확인하고, 반납 후 보증금을 돌려받아요.']].map(([number, title, description]) => <div key={number} className="flex items-start gap-3"><span className="eyebrow pt-1">{number}</span><div><p className="font-semibold">{title}</p><p className="mt-1 text-muted-foreground">{description}</p></div></div>)}
@@ -102,9 +104,11 @@ function Items() {
 function SearchForm({filters, concerts, onApply, loadConcerts, concertsLoading}: {filters: ExploreFilters; concerts: {id: string; title: string; date: string}[]; onApply: (values: Partial<ExploreFilters>) => void; loadConcerts?: () => void; concertsLoading: boolean}) {
   const [values, setValues] = useState(filters);
   const [error, setError] = useState<string | null>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
   const [expanded, setExpanded] = useState(!!(filters.pickupArea || filters.startsAt || filters.endsAt || filters.concertId));
+  useEffect(() => {if (error && expanded) errorRef.current?.focus();}, [error, expanded]);
   const field = (key: keyof ExploreFilters, value: string) => {setValues(current => ({...current, [key]: value})); setError(null);};
-  return <form onSubmit={event => {
+  return <form noValidate onSubmit={event => {
     event.preventDefault();
     const problem = values.startsAt || values.endsAt ? rentalPeriodConflict(values.startsAt, values.endsAt, []) : null;
     if (problem) {setError(problem); setExpanded(true); return;}
@@ -122,7 +126,7 @@ function SearchForm({filters, concerts, onApply, loadConcerts, concertsLoading}:
         <Field><FieldLabel htmlFor="explore-area"><MapPin className="size-4" aria-hidden="true"/>만남 지역</FieldLabel><Input id="explore-area" value={values.pickupArea} maxLength={100} onChange={event => field('pickupArea', event.target.value)} placeholder="예: 잠실, 홍대, KSPO"/></Field>
         <Field data-invalid={!!error}><FieldLabel htmlFor="explore-start"><CalendarDays className="size-4" aria-hidden="true"/>수령 일시 <span className="font-normal text-muted-foreground">선택</span></FieldLabel><Input id="explore-start" type="datetime-local" value={values.startsAt} onChange={event => field('startsAt', event.target.value)} aria-invalid={!!error} aria-describedby={error ? 'explore-period-error' : 'explore-date-hint'}/></Field>
         <Field data-invalid={!!error}><FieldLabel htmlFor="explore-end">반납 일시</FieldLabel><Input id="explore-end" type="datetime-local" min={values.startsAt || undefined} value={values.endsAt} onChange={event => field('endsAt', event.target.value)} aria-invalid={!!error} aria-describedby={error ? 'explore-period-error' : 'explore-date-hint'}/></Field>
-        {error ? <p id="explore-period-error" role="alert" className="text-sm text-destructive sm:col-span-2 lg:col-span-4">{error}</p> : <FieldDescription id="explore-date-hint" className="sm:col-span-2 lg:col-span-4">날짜를 입력하면 예약이 겹치지 않는 물품과 기간별 대여료를 보여드려요. 한국 시간 기준입니다.</FieldDescription>}
+        {error ? <p id="explore-period-error" ref={errorRef} tabIndex={-1} role="alert" className="text-sm text-destructive sm:col-span-2 lg:col-span-4">{error}</p> : <FieldDescription id="explore-date-hint" className="sm:col-span-2 lg:col-span-4">날짜를 입력하면 예약이 겹치지 않는 물품과 기간별 대여료를 보여드려요. 한국 시간 기준입니다.</FieldDescription>}
         <Button type="submit" size="lg" className="sm:hidden">선택한 조건으로 찾기</Button>
       </div>
     </FieldGroup>

@@ -24,6 +24,8 @@
     "test:mobile-errors": "node --experimental-strip-types --test scripts/test-mobile-errors.mjs",
     "test:email-auth": "node --experimental-strip-types --test scripts/test-email-auth-input.mjs",
     "test:rental-ux": "node --experimental-strip-types --test scripts/test-rental-ux.mjs",
+    "test:catalogue": "node --experimental-strip-types --test scripts/test-catalogue-api.mjs scripts/test-explore-state.mjs",
+    "test:reservation-context": "node --experimental-strip-types --test scripts/test-reservation-context.mjs",
     "test:email-auth:local": "node scripts/check-local-email-auth.mjs",
     "ops:recovery": "node scripts/recovery-ops.mjs"
   },
