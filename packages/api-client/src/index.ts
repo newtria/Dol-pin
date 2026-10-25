@@ -7,6 +7,9 @@ export type * from './services.ts';
 export {ApiRequestError} from './errors.ts';
 import {RentalRequestRejected} from './pending-rentals.ts';
 export {createPendingRentals, RentalRequestRejected, type RentalRequest} from './pending-rentals.ts';
+import {ItemRequestRejected} from './pending-items.ts';
+export {createPendingItems,ItemRequestRejected,ItemRequestRetired,type ItemCreationRequest} from './pending-items.ts';
+export {itemEditorQueryPolicy,freshItemForEditor,captureItemEditorSnapshot,type ItemEditorSnapshot} from './item-editor.ts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {itemInput, type ItemInput, type Database, type RentalRecoveryStatus} from '@dolpin/contracts';
 
@@ -138,11 +141,17 @@ export function createApi(client: Client) {
     async ownItemPickupNote(id: string) {
       return value(await client.rpc('own_item_pickup_note', {p_item_id: id}));
     },
-    async createItem(input: ItemInput) {
+    async createItem(input: ItemInput,requestId:string,expectedOwner:string) {
       const parsed = itemInput.parse(input);
-      const auth = await client.auth.getUser();
-      if (auth.error || !auth.data.user) throw new Error('로그인이 필요합니다.');
-      const item = value(await client.from('rental_items').insert({...parsed, lender_id: auth.data.user.id, currency: 'KRW'}).select(itemColumns).single());
+      const {data,error}=await client.auth.getSession();
+      if(!expectedOwner||error||data.session?.user.id!==expectedOwner||!data.session.access_token)throw new ApiRequestError({code:'AUTH_REQUIRED'});
+      const result=await client.rpc('create_my_item',{p_request_id:requestId,p_input:parsed}).setHeader('Authorization',`Bearer ${data.session.access_token}`);
+      if(result.error){
+        if(result.error.code==='PIT01')throw new ApiRequestError({code:'STATE_CONFLICT'});
+        const rejected=result.status>=400&&result.status<500&&/^[0-9A-Z]{5}$/.test(result.error.code??'');
+        throw rejected?new ItemRequestRejected(result.error.message,result.error.code):Object.assign(new Error(result.error.message),{code:result.error.code});
+      }
+      const item=result.data;
       if (!item) throw new Error('등록한 물품을 확인하지 못했습니다.');
       return withProductPhotos(client,item);
     },

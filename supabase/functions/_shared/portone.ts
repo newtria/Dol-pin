@@ -86,8 +86,15 @@ export async function fetchPortOnePayment(
 
 export async function portOneCancel(
   token: string,
-  params: { imp_uid: string; amount?: number; reason: string },
+  params: { imp_uid: string; amount: number; checksum: number; reason: string },
 ): Promise<PortOnePayment> {
+  // Never let an omitted/invalid amount become a full cancellation, or omit
+  // PortOne's atomic balance check when another actor has already refunded.
+  if (
+    !Number.isSafeInteger(params.amount) || params.amount <= 0 ||
+    !Number.isSafeInteger(params.checksum) || params.checksum <= 0 ||
+    params.amount > params.checksum
+  ) throw new Error("Invalid cancellation amounts");
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), PORTONE_TIMEOUT_MS);
   try {

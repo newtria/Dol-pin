@@ -2,6 +2,7 @@ import {readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {createClient} from '@supabase/supabase-js';
+import {createApi} from '../packages/api-client/src/index.ts';
 const env = Object.fromEntries(readFileSync('apps/mobile/.env.local', 'utf8').trim().split('\n').map(line => {
   const i = line.indexOf('='); return [line.slice(0, i), line.slice(i + 1)];
 }));
@@ -24,25 +25,26 @@ const bytes = readFileSync('assets/demo/lightstick.png');
 assert.ifError((await lender.client.storage.from('product-photos').upload(filename, bytes, {contentType: 'image/png'})).error);
 assert.ok((await outsider.client.storage.from('product-photos').upload(`${lender.id}/${randomUUID()}.png`, bytes, {contentType: 'image/png'})).error);
 const photo = lender.client.storage.from('product-photos').getPublicUrl(filename).data.publicUrl;
-const item = {lender_id: lender.id, title: '[로컬 데모] 콘서트 응원봉', description: '합성 사진을 사용한 검증용 가상 상품입니다.', category: 'lightstick', photos: [photo], daily_price: 5000, currency: 'KRW', deposit: 30000, pickup_method: 'direct', pickup_area: '공연장 인근', pickup_note: '거래 상대 전용 상세 장소'};
-const created = await lender.client.from('rental_items').insert(item).select('id,pickup_area').single();
-assert.ifError(created.error);
+const item = {title: '[로컬 데모] 콘서트 응원봉', description: '합성 사진을 사용한 검증용 가상 상품입니다.', category: 'lightstick', concert_id: null, photos: [photo], daily_price: 5000, deposit: 30000, pickup_method: 'direct', pickup_area: '공연장 인근', pickup_note: '거래 상대 전용 상세 장소'};
+const api=createApi(lender.client),requestId=randomUUID();
+const created = await api.createItem(item,requestId,lender.id);
+assert.equal((await api.createItem(item,requestId,lender.id)).id,created.id,'creation retries must return the same item');
 const anon = createClient(url, env.EXPO_PUBLIC_SUPABASE_ANON_KEY, options);
-assert.ifError((await anon.from('rental_items').select('id').eq('id', created.data.id).single()).error);
-assert.equal(created.data.pickup_area, item.pickup_area);
+assert.ifError((await anon.from('rental_items').select('id').eq('id', created.id).single()).error);
+assert.equal(created.pickup_area, item.pickup_area);
 for (const reader of [anon, outsider.client, lender.client]) {
   for (const field of ['pickup_note', 'pickup_location', 'imei', '*']) {
-    assert.ok((await reader.from('rental_items').select(field).eq('id', created.data.id)).error, `${field} must require a private access path`);
+    assert.ok((await reader.from('rental_items').select(field).eq('id', created.id)).error, `${field} must require a private access path`);
   }
 }
-assert.equal((await lender.client.rpc('own_item_pickup_note', {p_item_id: created.data.id})).data, item.pickup_note);
-assert.ok((await outsider.client.rpc('own_item_pickup_note', {p_item_id: created.data.id})).error);
-assert.ok((await anon.rpc('own_item_pickup_note', {p_item_id: created.data.id})).error);
-const attack = await outsider.client.from('rental_items').update({daily_price: 100}).eq('id', created.data.id).select('id');
+assert.equal((await lender.client.rpc('own_item_pickup_note', {p_item_id: created.id})).data, item.pickup_note);
+assert.ok((await outsider.client.rpc('own_item_pickup_note', {p_item_id: created.id})).error);
+assert.ok((await anon.rpc('own_item_pickup_note', {p_item_id: created.id})).error);
+const attack = await outsider.client.from('rental_items').update({daily_price: 100}).eq('id', created.id).select('id');
 assert.ok(attack.error || attack.data.length === 0);
-assert.ok((await lender.client.from('rental_items').update({bt_verified: true}).eq('id', created.data.id)).error);
-assert.ok((await lender.client.from('rental_items').insert({...item, daily_price: -1})).error);
-assert.ifError((await lender.client.rpc('update_my_item',{p_item_id:created.data.id,p_input:{description:item.description+' 소유자 수정 검증.'}})).error);
+assert.ok((await lender.client.from('rental_items').update({bt_verified: true}).eq('id', created.id)).error);
+assert.ok((await lender.client.from('rental_items').insert({...item,lender_id:lender.id,currency:'KRW',daily_price: -1})).error);
+assert.ifError((await lender.client.rpc('update_my_item',{p_item_id:created.id,p_input:{description:item.description+' 소유자 수정 검증.'},p_expected_version:created.updated_at})).error);
 await Promise.all([lender.client.auth.signOut(), outsider.client.auth.signOut()]);
 console.log('Product upload/create/public read/owner edit passed; foreign upload/edit, trust flag, invalid price rejected.');
-console.log(`Local demo item: ${created.data.id}`);
+console.log(`Local demo item: ${created.id}`);

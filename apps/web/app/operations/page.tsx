@@ -107,7 +107,7 @@ function OperationWorkspace(){
   <h3 className="text-xl font-semibold">신고</h3>
   {serviceData&&!serviceData.reports.length?<p className="rounded-xl bg-secondary p-4 text-sm text-muted-foreground">이 페이지에 처리할 신고가 없습니다.</p>:null}
   {serviceData?.reports.map(r=><article key={r.id} className="flex flex-col gap-3 rounded-xl border bg-card p-4">
-   <p>{reportLabels[r.reason]??'신고'} · 접수됨</p><p className="whitespace-pre-wrap">{r.description}</p>
+   <p>{reportLabels[r.reason]??'신고'} · 접수됨</p><p className="text-sm text-muted-foreground">접수자: {r.reporter_state==='closed'?'탈퇴한 사용자':r.reporter_state==='incomplete'?'프로필 미생성 사용자':r.reporter_name??'사용자'}</p><p className="whitespace-pre-wrap">{r.description}</p>
    {r.reservation_id?<Button variant="outline" onClick={()=>inspect(r.reservation_id!)}>관련 거래 조사</Button>:null}
    {r.reported_item_id?<><Button variant="outline" onClick={()=>inspectItem(r.reported_item_id!)}>신고된 물품 조사</Button><Button disabled={command.isPending} onClick={()=>moderateItem(r.reported_item_id!,true)}>물품 비노출</Button></>:null}
    {r.reported_user_id?<Button disabled={command.isPending} onClick={()=>{const reason=askReason('계정 제한 사유를 입력하세요.');if(reason)command.mutate(()=>api.setUserSuspended(r.reported_user_id!,true,reason));}}>계정 제한</Button>:null}

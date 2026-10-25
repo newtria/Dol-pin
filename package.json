@@ -26,6 +26,8 @@
     "test:rental-ux": "node --experimental-strip-types --test scripts/test-rental-ux.mjs",
     "test:catalogue": "node --experimental-strip-types --test scripts/test-catalogue-api.mjs scripts/test-explore-state.mjs",
     "test:reservation-context": "node --experimental-strip-types --test scripts/test-reservation-context.mjs",
+    "test:item-authoring": "node --experimental-strip-types --test scripts/test-item-authoring.mjs",
+    "test:account-lifecycle": "node --experimental-strip-types --test scripts/test-incomplete-account-lifecycle.mjs",
     "test:email-auth:local": "node scripts/check-local-email-auth.mjs",
     "ops:recovery": "node scripts/recovery-ops.mjs"
   },

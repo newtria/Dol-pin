@@ -2,7 +2,7 @@ import {useState} from 'react';
 import {Alert,Linking,Text,View,Switch} from 'react-native';
 import {router} from 'expo-router';
 import {useInfiniteQuery,useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
-import {api,client} from './client';
+import {api} from './client';
 import {useSession} from './session';
 import {Button,Field,ErrorText,Section,s} from './ui';
 export function AccountSettings() {
@@ -12,7 +12,6 @@ export function AccountSettings() {
  const change=useMutation({mutationFn:()=>api.updateProfile({nickname}),onSuccess:()=>{void queries.invalidateQueries({queryKey:['profile']});Alert.alert('변경했습니다','닉네임을 변경했습니다.');}});
  const agree=useMutation({mutationFn:()=>{if(!consent.data)throw {code:'SERVICE_UNAVAILABLE'};return api.recordConsent({termsVersion:consent.data.termsVersion,privacyVersion:consent.data.privacyVersion});},onSuccess:()=>queries.invalidateQueries({queryKey:['consent']})});
  const unblock=useMutation({mutationFn:(id:string)=>api.blockUser(id,false),onSuccess:()=>queries.invalidateQueries({queryKey:['blocked-users']})});
- const close=useMutation({mutationFn:api.closeAccount,onSuccess:async()=>{const {error}=await client.auth.signOut({scope:'local'});queries.clear();if(error)throw error;router.replace('/account');}});
  const terms=process.env.EXPO_PUBLIC_TERMS_URL,privacy=process.env.EXPO_PUBLIC_PRIVACY_URL;
  const open=useMutation({mutationFn:(url:string)=>Linking.openURL(url)});
  return <View style={{gap:16}}>
@@ -23,7 +22,6 @@ export function AccountSettings() {
   </Section>
   <Section title="차단 관리">{blocks.data?.pages.flat().map(user=><Button key={user.id} label={`${user.nickname} 차단 해제`} secondary disabled={unblock.isPending} onPress={()=>unblock.mutate(user.id)}/>)}
   {blocks.data?.pages[0].length===0?<Text style={s.body}>차단한 사용자가 없습니다.</Text>:null}{blocks.hasNextPage?<Button label="차단한 사용자 더 보기" secondary disabled={blocks.isFetchingNextPage} onPress={()=>void blocks.fetchNextPage()}/>:null}
-  </Section><Section title="계정 관리"><Text style={s.muted}>탈퇴 전 진행 중인 거래와 지급 내역을 확인해 주세요.</Text><Button label="회원 탈퇴" secondary disabled={close.isPending} onPress={()=>Alert.alert('탈퇴하시겠습니까?','진행 중 거래나 미지급 대여료가 있으면 먼저 처리해야 합니다. 탈퇴 후 계정은 복구할 수 없으며 필요한 거래 기록은 보존됩니다.',[{text:'취소',style:'cancel'},{text:'탈퇴',style:'destructive',onPress:()=>close.mutate()}])}/>
-  </Section><ErrorText error={change.error??agree.error??close.error??consent.error??blocks.error??unblock.error??open.error}/>
+  </Section><ErrorText error={change.error??agree.error??consent.error??blocks.error??unblock.error??open.error}/>
  </View>;
 }

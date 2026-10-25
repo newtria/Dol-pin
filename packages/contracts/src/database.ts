@@ -34,6 +34,28 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_identities: {
+        Row: { id: string; created_at: string; closed_at: string | null }
+        Insert: { id: string; created_at?: string; closed_at?: string | null }
+        Update: { id?: string; created_at?: string; closed_at?: string | null }
+        Relationships: []
+      }
+      account_closures: {
+        Row: { user_id: string; requested_at: string; auth_deleted_at: string | null; attempts: number; last_attempt_at: string | null }
+        Insert: { user_id: string; requested_at?: string; auth_deleted_at?: string | null; attempts?: number; last_attempt_at?: string | null }
+        Update: { user_id?: string; requested_at?: string; auth_deleted_at?: string | null; attempts?: number; last_attempt_at?: string | null }
+        Relationships: [{ foreignKeyName: "account_closures_user_id_fkey"; columns: ["user_id"]; isOneToOne: true; referencedRelation: "account_identities"; referencedColumns: ["id"] }]
+      }
+      item_creation_requests: {
+        Row: { owner_id: string; request_id: string; input_hash: string; item_id: string; created_at: string }
+        Insert: { owner_id: string; request_id: string; input_hash: string; item_id: string; created_at?: string }
+        Update: { owner_id?: string; request_id?: string; input_hash?: string; item_id?: string; created_at?: string }
+        Relationships: [
+          { foreignKeyName: "item_creation_requests_owner_id_fkey"; columns: ["owner_id"]; isOneToOne: false; referencedRelation: "users"; referencedColumns: ["id"] },
+          { foreignKeyName: "item_creation_requests_owner_id_fkey"; columns: ["owner_id"]; isOneToOne: false; referencedRelation: "public_user_profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "item_creation_requests_item_id_fkey"; columns: ["item_id"]; isOneToOne: false; referencedRelation: "rental_items"; referencedColumns: ["id"] },
+        ]
+      }
       api_usage_counters: {
         Row: {
           day_count: number
@@ -60,6 +82,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "api_usage_counters_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "account_identities"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "api_usage_counters_feature_fkey"
             columns: ["feature"]
@@ -650,14 +679,7 @@ export type Database = {
             foreignKeyName: "reports_reporter_id_fkey"
             columns: ["reporter_id"]
             isOneToOne: false
-            referencedRelation: "public_user_profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reports_reporter_id_fkey"
-            columns: ["reporter_id"]
-            isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "account_identities"
             referencedColumns: ["id"]
           },
         ]
@@ -1190,6 +1212,22 @@ export type Database = {
       }
     }
     Functions: {
+      support_account_is_open: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      create_my_item: {
+        Args: { p_request_id: string; p_input: Json }
+        Returns: Database['public']['Tables']['rental_items']['Row']
+      }
+      update_my_item: {
+        Args: { p_item_id: string; p_input: Json; p_expected_version: string }
+        Returns: Database['public']['Tables']['rental_items']['Row']
+      }
+      get_my_item: {
+        Args: { p_item_id: string }
+        Returns: Database['public']['Tables']['rental_items']['Row']
+      }
       search_rental_items: {
         Args: {
           p_concert_id?: string | null

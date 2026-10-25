@@ -80,13 +80,11 @@ BEGIN
   RAISE EXCEPTION 'owner direct private-column read must use RPC';
  EXCEPTION WHEN insufficient_privilege THEN NULL;
  END;
- -- Product authoring must still work with public RETURNING columns, even
- -- though detailed directions are a private INSERT field.
- INSERT INTO public.rental_items(lender_id,title,category,photos,daily_price,deposit,currency,
-  pickup_method,pickup_area,pickup_note)
- VALUES('14000000-0000-4000-8000-000000000001','owner created fixture','lightstick',
-  ARRAY['http://127.0.0.1:55321/storage/v1/object/public/product-photos/14000000-0000-4000-8000-000000000001/fixture.png'],5000,30000,'KRW','direct','역 인근','상대방 전용 안내')
- RETURNING id,pickup_area INTO created_id,public_area;
+ -- Product authoring returns the owner's private details through its command.
+ SELECT result.id,result.pickup_area INTO created_id,public_area FROM public.create_my_item(gen_random_uuid(),jsonb_build_object(
+  'title','owner created fixture','category','lightstick',
+  'photos',jsonb_build_array('http://127.0.0.1:55321/storage/v1/object/public/product-photos/14000000-0000-4000-8000-000000000001/fixture.png'),
+  'daily_price',5000,'deposit',30000,'pickup_method','direct','pickup_area','역 인근','pickup_note','상대방 전용 안내')) result;
  IF created_id IS NULL OR public_area IS DISTINCT FROM '역 인근'
   OR public.own_item_pickup_note(created_id) IS DISTINCT FROM '상대방 전용 안내' THEN
   RAISE EXCEPTION 'owner create/public projection contract failed';
@@ -113,7 +111,8 @@ END $$;
 
 SELECT set_config('request.jwt.claim.sub','14000000-0000-4000-8000-000000000001',true);
 SELECT public.respond_to_rental(current_setting('test.private_item_rental_id')::uuid,'accept');
-SELECT public.update_my_item('24000000-0000-4000-8000-000000000001','{"pickup_note":"수락 이후 수정된 안내"}'::jsonb);
+SELECT public.update_my_item('24000000-0000-4000-8000-000000000001','{"pickup_note":"수락 이후 수정된 안내"}'::jsonb,
+ (SELECT updated_at FROM public.rental_items WHERE id='24000000-0000-4000-8000-000000000001'));
 DO $$ BEGIN
  IF public.own_item_pickup_note('24000000-0000-4000-8000-000000000001') IS DISTINCT FROM '수락 이후 수정된 안내' THEN
   RAISE EXCEPTION 'owner private instruction update unavailable';

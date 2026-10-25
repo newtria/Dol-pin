@@ -1,10 +1,11 @@
 import {EmailAuth} from '../src/email-auth';
 import {AccountSettings} from '../src/account-settings';
+import {AccountClosure} from '../src/account-closure';
 import {disablePush} from '../src/push';
 import {SocialButtons} from '../src/social-buttons';
 import {signInWithSocial} from '../src/oauth';
 import {useEffect,useState} from 'react';
-import {router,useFocusEffect,type Href} from 'expo-router';
+import {router,useFocusEffect,useLocalSearchParams,type Href} from 'expo-router';
 import {useCallback} from 'react';
 import {authReturn,clearAuthReturn} from '../src/auth-return';
 import {Alert, Pressable, ScrollView, Text, View} from 'react-native';
@@ -19,6 +20,7 @@ import {Button,ValidationText, Field, ErrorText, Section, s,colors} from '../src
 
 export default function Account() {
   const {session, ready} = useSession();
+  const {closure}=useLocalSearchParams<{closure?:string}>();
   const persistent = useSessionPersistence();
   const [focused,setFocused]=useState(false);
   const [returnTo,setReturnTo]=useState<Href|null>(null);
@@ -51,6 +53,7 @@ export default function Account() {
   const createProfile = useMutation({mutationFn: () => api.ensureProfile(nickname), onSuccess: () => queries.invalidateQueries({queryKey: ['profile', session?.user.id]})});
   const authBusy=emailBusy||oauth.isPending||send.isPending||verify.isPending;
   return <ScrollView contentContainerStyle={{paddingHorizontal:28,paddingTop:32,paddingBottom:40,flexGrow:1}} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets keyboardDismissMode="on-drag">
+    {!session&&(closure==='pending'||closure==='closed')?<Text accessibilityRole="alert" style={s.body}>{closure==='pending'?'탈퇴 요청을 접수했습니다. 계정 접근은 종료되었으며 남은 계정 정보 정리는 자동으로 다시 처리합니다.':'회원 탈퇴를 완료했습니다.'}</Text>:null}
     {session ? <Text style={[s.title,{marginBottom:24}]}>내 정보</Text> : null}
     {returnTo?<View style={[s.card,{marginBottom:20}]}><Text style={s.heading}>하던 작업을 이어갈게요</Text><Text style={s.muted}>{session?requiresSetup?'프로필과 거래 이용 동의를 완료하면 선택한 화면으로 돌아갑니다.':'이전 화면으로 돌아갑니다.':'로그인하면 선택한 날짜와 함께 이전 화면으로 돌아갑니다.'}</Text><Button label="이어서 진행하지 않고 내 정보 보기" secondary onPress={()=>{setReturnTo(null);void clearAuthReturn();}}/></View>:null}
     {!persistent?<Text accessibilityRole="alert" style={s.muted}>이 기기에 로그인을 저장하지 못했습니다. 앱을 다시 열면 로그인해야 할 수 있습니다.</Text>:null}
@@ -59,7 +62,8 @@ export default function Account() {
       <Text style={s.muted}>{session.user.email ?? session.user.phone}</Text>
       {!profile.isPending && !profile.isError && !profile.data ? <><Field label="닉네임" value={nickname} onChangeText={setNickname}/><Button label="프로필 만들기" onPress={() => createProfile.mutate()} disabled={nickname.trim().length < 2 || createProfile.isPending}/></> : null}
       <ErrorText error={profile.error ?? consent.error ?? logout.error ?? createProfile.error}/>
-      {profile.data?<AccountSettings key={session.user.id}/>:null}
+      {profile.data?<AccountSettings key={session.user.id}/>:<Button label="프로필 없이 고객 문의하기" secondary onPress={()=>router.push('/support')}/>}
+      <AccountClosure key={session.user.id}/>
       <Button label="로그아웃" secondary onPress={() => logout.mutate()} disabled={logout.isPending}/>
     </View> : <View style={{width:'100%',maxWidth:340,alignSelf:'center',flex:1}}>
       <View style={{paddingTop:12,paddingBottom:36,gap:12}}>

@@ -21,11 +21,19 @@ export interface PaymentProvider {
   cancel(
     paymentId: string,
     amount: number,
-    total: number,
+    // Balance observed before this request, not the original capture amount.
+    expectedRefundableAmount: number,
     operationId: string,
   ): Promise<Payment>;
 }
 export type ProviderFactory = (name: string) => PaymentProvider;
+
+function assertCancellationAmounts(amount: number, balance: number) {
+  if (
+    !Number.isSafeInteger(amount) || amount <= 0 ||
+    !Number.isSafeInteger(balance) || balance <= 0 || amount > balance
+  ) throw new ApiError("PAYMENT_REVIEW_REQUIRED");
+}
 
 function tossPayment(p: Record<string, unknown>): Payment {
   if (
@@ -97,11 +105,12 @@ export function tossProvider(): PaymentProvider {
         orderId,
       ))!;
     },
-    async cancel(id, amount, total, operationId) {
+    async cancel(id, amount, expectedRefundableAmount, operationId) {
+      assertCancellationAmounts(amount, expectedRefundableAmount);
       return (await request(`/${encodeURIComponent(id)}/cancel`, {
         cancelReason: "돌핀 대여 거래 환불",
         cancelAmount: amount,
-        refundableAmount: total,
+        refundableAmount: expectedRefundableAmount,
       }, operationId))!;
     },
   };
@@ -111,20 +120,32 @@ export const paymentProvider: ProviderFactory = (name) => {
   if (name !== "portone") throw new Error("지원하지 않는 결제사입니다.");
   const map = (
     p: Awaited<ReturnType<typeof fetchPortOnePayment>>,
-  ): Payment => ({
-    id: p.imp_uid,
-    orderId: extractReservationId(p.merchant_uid) ?? "",
-    total: p.amount,
-    refunded: p.cancel_amount ?? 0,
-    currency: p.currency ?? "",
-    status: p.status === "paid"
-      ? "paid"
-      : p.status === "cancelled"
-      ? "cancelled"
-      : p.status === "failed"
-      ? "failed"
-      : "unpaid",
-  });
+  ): Payment => {
+    // A missing cumulative refund is unknown, never evidence of a zero refund.
+    if (
+      typeof p.imp_uid !== "string" || typeof p.merchant_uid !== "string" ||
+      !Number.isSafeInteger(p.amount) || p.amount <= 0 ||
+      typeof p.cancel_amount !== "number" ||
+      !Number.isSafeInteger(p.cancel_amount) ||
+      p.cancel_amount < 0 || p.cancel_amount > p.amount ||
+      typeof p.currency !== "string" ||
+      !["paid", "ready", "failed", "cancelled"].includes(p.status)
+    ) throw new ApiError("PAYMENT_REVIEW_REQUIRED");
+    return {
+      id: p.imp_uid,
+      orderId: extractReservationId(p.merchant_uid) ?? "",
+      total: p.amount,
+      refunded: p.cancel_amount,
+      currency: p.currency,
+      status: p.status === "paid"
+        ? "paid"
+        : p.status === "cancelled"
+        ? "cancelled"
+        : p.status === "failed"
+        ? "failed"
+        : "unpaid",
+    };
+  };
   return {
     lookupOrder() {
       throw new Error("PortOne 주문 복구는 기존 경로를 사용해 주세요.");
@@ -135,11 +156,13 @@ export const paymentProvider: ProviderFactory = (name) => {
     confirm() {
       throw new Error("PortOne 승인은 기존 경로를 사용해 주세요.");
     },
-    async cancel(id, amount) {
+    async cancel(id, amount, expectedRefundableAmount) {
+      assertCancellationAmounts(amount, expectedRefundableAmount);
       return map(
         await portOneCancel(await getPortOneAccessToken(), {
           imp_uid: id,
           amount,
+          checksum: expectedRefundableAmount,
           reason: "돌핀 대여 거래 환불",
         }),
       );

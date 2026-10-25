@@ -30,8 +30,22 @@ Deno.serve(async(req)=>{
     admin.rpc("service_health"),
    ]);
    for(const result of [reports,users,items,notifications,closures,health])if(result.error)throw result.error;
+   const reportRows=reports.data?.slice(0,100)??[];
+   const reporterIds=[...new Set(reportRows.map(report=>report.reporter_id))];
+   const [reporterProfiles,reporterAccounts]=await Promise.all([
+    reporterIds.length?admin.from("users").select("id,nickname,deleted_at").in("id",reporterIds):{data:[],error:null},
+    reporterIds.length?admin.from("account_identities").select("id,closed_at").in("id",reporterIds):{data:[],error:null},
+   ]);
+   if(reporterProfiles.error)throw reporterProfiles.error;
+   if(reporterAccounts.error)throw reporterAccounts.error;
+   const profileById=new Map((reporterProfiles.data??[]).map(profile=>[profile.id,profile]));
+   const closedIds=new Set((reporterAccounts.data??[]).filter(account=>account.closed_at).map(account=>account.id));
    const hasMore=[reports,users,items,notifications,closures].some(result=>(result.data?.length??0)>100);
-   return jsonResponse(200,{reports:reports.data?.slice(0,100),users:users.data?.slice(0,100),items:items.data?.slice(0,100),
+   return jsonResponse(200,{reports:reportRows.map(report=>{
+    const profile=profileById.get(report.reporter_id);
+    const closed=closedIds.has(report.reporter_id)||!!profile?.deleted_at;
+    return {...report,reporter_name:closed?null:profile?.nickname??null,reporter_state:closed?'closed':profile?'profile':'incomplete'};
+   }),users:users.data?.slice(0,100),items:items.data?.slice(0,100),
     notifications:notifications.data?.slice(0,100).map(({receipt_id,...notification})=>({...notification,canRetry:receipt_id!==null||["PROVIDER_REJECTED","RATE_LIMITED"].includes(notification.last_code??"")})),
     closures:closures.data?.slice(0,100),health:health.data,hasMore});
   }

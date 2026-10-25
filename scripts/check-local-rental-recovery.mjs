@@ -22,12 +22,12 @@ const dir=await mkdtemp(join(tmpdir(),'dolpin-api-recovery-'));
 const storage={getItem:key=>readFile(join(dir,key),'utf8').catch(e=>{if(e.code==='ENOENT')return null;throw e;}),setItem:(key,value)=>writeFile(join(dir,key),value),removeItem:key=>unlink(join(dir,key))};
 try {
  const photo=await lender.client.from('rental_items').select('photos').eq('lender_id',lender.id).like('title','%로컬 데모%').limit(1).single();assert.ifError(photo.error);
- const created=await lender.client.from('rental_items').insert({lender_id:lender.id,title:'[QA] 예약 복구 '+randomUUID().slice(0,8),category:'lightstick',photos:photo.data.photos,daily_price:5000,deposit:30000,currency:'KRW',pickup_method:'direct'}).select('id,updated_at').single();assert.ifError(created.error);
+ const created=await lender.client.rpc('create_my_item',{p_request_id:randomUUID(),p_input:{title:'[QA] 예약 복구 '+randomUUID().slice(0,8),category:'lightstick',photos:photo.data.photos,daily_price:5000,deposit:30000,pickup_method:'direct',pickup_area:'공연장 인근',pickup_note:'2번 출구'}});assert.ifError(created.error);
  const item=created.data;
  const input={p_item_id:item.id,p_starts_at:new Date(Date.now()+86400000*10).toISOString(),p_ends_at:new Date(Date.now()+86400000*10+3600000).toISOString(),p_item_version:item.updated_at,p_request_id:randomUUID()};
  let original;
  await assert.rejects(createPendingRentals(storage).submit(borrower.id,input,async request=>{original=await borrower.api.requestRental(request);throw new Error('response lost after DB commit');}));
- const updated=await lender.client.rpc('update_my_item',{p_item_id:item.id,p_input:{daily_price:9000}});assert.ifError(updated.error);
+ const updated=await lender.client.rpc('update_my_item',{p_item_id:item.id,p_input:{daily_price:9000},p_expected_version:item.updated_at});assert.ifError(updated.error);
  const resumed=await createPendingRentals(storage).submit(borrower.id,{...input,p_item_version:updated.data.updated_at,p_request_id:randomUUID()},borrower.api.requestRental);
  assert.equal(resumed.id,original.id);assert.equal(resumed.rental_fee,5000);
  const count=await borrower.client.from('reservations').select('id').eq('item_id',item.id);assert.ifError(count.error);assert.equal(count.data.length,1);

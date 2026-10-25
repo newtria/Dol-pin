@@ -17,6 +17,7 @@ export async function rpc<T = unknown>(
 }
 function identity(p: Payment, id: string, total: number, orderId?: string) {
   if (
+    !Number.isSafeInteger(total) || total <= 0 ||
     p.id !== id || p.total !== total || p.currency !== "KRW" ||
     (orderId && p.orderId !== orderId) ||
     !Number.isSafeInteger(p.refunded) || p.refunded < 0 || p.refunded > p.total
@@ -179,6 +180,10 @@ export async function reconcileMoney(
   );
   if (!op?.id) return { status: "processing" };
   try {
+    if (
+      !Number.isSafeInteger(op.total) || op.total <= 0 ||
+      !Number.isSafeInteger(op.amount) || op.amount < 0 || op.amount > op.total
+    ) throw new ApiError("PAYMENT_REVIEW_REQUIRED");
     // A zero refund must also verify that the capture was not refunded outside
     // this operation before any money is released to the lender.
     {
@@ -213,8 +218,14 @@ export async function reconcileMoney(
           { p_id: id, p_lease: lease },
         );
         if (!valid) return { status: "processing" };
+        const expectedRefundableAmount = p.total - p.refunded;
         p = await providerCall(() =>
-          provider.cancel(op.payment_id, op.amount, op.total, op.id)
+          provider.cancel(
+            op.payment_id,
+            op.amount,
+            expectedRefundableAmount,
+            op.id,
+          )
         );
         identity(p, op.payment_id, op.total, orderId);
         if (p.refunded !== op.amount || !["paid", "cancelled"].includes(p.status)) {

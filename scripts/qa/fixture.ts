@@ -38,7 +38,7 @@ export async function fixture() {
  const path=`${lender.id}/${tag}.png`;
  checked(await lender.client.storage.from('product-photos').upload(path,png,{contentType:'image/png'}),'fixture product-photo upload');
  const photo=lender.client.storage.from('product-photos').getPublicUrl(path).data.publicUrl;
- const item=checked(await lender.client.from('rental_items').insert({lender_id:lender.id,title:`${tag} 응원봉`,description:'수락 당시 설명',pickup_area:'공연장 인근',pickup_note:'공연장 2번 출구',category:'lightstick',photos:[photo],daily_price:5000,deposit:30000,currency:'KRW',pickup_method:'direct'}).select('id,title,photos,updated_at').single());
+ const item=checked(await lender.client.rpc('create_my_item',{p_request_id:crypto.randomUUID(),p_input:{title:`${tag} 응원봉`,description:'수락 당시 설명',pickup_area:'공연장 인근',pickup_note:'공연장 2번 출구',category:'lightstick',photos:[photo],daily_price:5000,deposit:30000,pickup_method:'direct'}}));
  async function rental(offset=0) {
   const current=checked(await lender.client.from('rental_items').select('updated_at').eq('id',item.id).single());
   const r=checked(await borrower.client.rpc('request_rental',{p_item_id:item.id,p_starts_at:new Date(Date.now()+(7+offset)*86400000).toISOString(),p_ends_at:new Date(Date.now()+(7+offset)*86400000+4*3600000).toISOString(),p_item_version:current.updated_at,p_request_id:crypto.randomUUID()}));
@@ -86,6 +86,7 @@ export async function fixture() {
    DELETE FROM public.rental_money_operations WHERE reservation_id IN (SELECT id FROM public.reservations WHERE lender_id='${lender.id}');
    DELETE FROM public.rental_events WHERE reservation_id IN (SELECT id FROM public.reservations WHERE lender_id='${lender.id}');
    DELETE FROM public.reservations WHERE lender_id='${lender.id}';
+   DELETE FROM public.item_creation_requests WHERE owner_id='${lender.id}';
    DELETE FROM public.rental_items WHERE lender_id='${lender.id}';
    ${concertIds.length?`DELETE FROM public.concerts WHERE id IN (${concertIds.map(id=>`'${id}'`).join(',')});`:''}
    DELETE FROM public.users WHERE id IN (${ids.map(id=>`'${id}'`).join(',')});

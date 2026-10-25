@@ -26,9 +26,9 @@ Deno.test('messages are participant scoped, idempotent, immutable and blocked at
 Deno.test('item commands enforce ownership, private listing, blocked reservations, and active accounts',async()=>{
  const f=await fixture();
  try{
-  assert((await f.outsider.client.rpc('update_my_item',{p_item_id:f.item.id,p_input:{daily_price:100}})).error,'outsider edits item');
+  assert((await f.outsider.client.rpc('update_my_item',{p_item_id:f.item.id,p_input:{daily_price:100},p_expected_version:f.item.updated_at})).error,'outsider edits item');
   assert((await f.lender.client.from('rental_items').update({daily_price:100}).eq('id',f.item.id)).error,'raw update bypass');
-  checked(await f.lender.client.rpc('update_my_item',{p_item_id:f.item.id,p_input:{description:'새 설명',pickup_note:'새 상세 장소'}}));
+  checked(await f.lender.client.rpc('update_my_item',{p_item_id:f.item.id,p_input:{description:'새 설명',pickup_note:'새 상세 장소'},p_expected_version:f.item.updated_at}));
   checked(await f.lender.client.rpc('set_my_item_status',{p_item_id:f.item.id,p_status:'hidden'}));
   assert(checked(await f.outsider.client.from('rental_items').select('id').eq('id',f.item.id)).length===0,'hidden listing exposed');
   assert(checked(await f.lender.client.rpc('my_items')).some((row:{id:string})=>row.id===f.item.id),'owner lost hidden item');

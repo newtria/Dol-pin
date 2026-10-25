@@ -12,7 +12,7 @@ export type ServiceCursor = {createdAt:string;id:string};
 export type ConsentStatus = {termsVersion:string;privacyVersion:string;accepted:boolean};
 export type ServiceReport = Database['public']['Tables']['reports']['Row'] & {reservation_id:string|null;resolution_note:string|null};
 export type ServiceOperations = {
- reports: {id:string;reporter_id:string;reported_user_id:string|null;reported_item_id:string|null;reservation_id:string|null;reason:string;description:string|null;status:string;created_at:string}[];
+ reports: {id:string;reporter_id:string;reporter_name:string|null;reporter_state:'profile'|'incomplete'|'closed';reported_user_id:string|null;reported_item_id:string|null;reservation_id:string|null;reason:string;description:string|null;status:string;created_at:string}[];
  users: {id:string;nickname:string;suspended_at:string|null;deleted_at:string|null}[];
  items: {id:string;title:string;lender_id:string;moderated_at:string;status:string}[];
  notifications: {id:string;status:string;last_code:string|null;attempt_count:number;canRetry:boolean}[];
@@ -32,7 +32,8 @@ type ServiceDatabase = Omit<Database,'public'> & {public: Omit<Database['public'
   consent_status: Rpc<Record<string,never>,ConsentStatus>;
   record_consent: Rpc<{p_terms_version:string;p_privacy_version:string},undefined>;
   my_items: Rpc<{p_offset?:number},OwnedItem[]>;
-  update_my_item: Rpc<{p_item_id:string;p_input:Json},OwnedItem>;
+  get_my_item: Rpc<{p_item_id:string},OwnedItem>;
+  update_my_item: Rpc<{p_item_id:string;p_input:Json;p_expected_version:string},OwnedItem>;
   set_my_item_status: Rpc<{p_item_id:string;p_status:string},OwnedItem>;
   item_availability: Rpc<{p_item_id:string},{starts_at:string;ends_at:string}[]>;
   send_rental_message: Rpc<{p_reservation_id:string;p_message:string;p_request_id:string},ServiceMessage>;
@@ -62,8 +63,14 @@ function validateCursor(cursor:ServiceCursor) {
 
 export function createServiceApi(base:SupabaseClient<Database>) {
  const client=base as unknown as SupabaseClient<ServiceDatabase>;
- async function invoke<T>(name:string,body:Record<string,unknown>):Promise<T> {
-  const {data,error}=await client.functions.invoke(name,{body});
+ async function ownerHeaders(expectedOwner:string):Promise<Record<string,string>> {
+  const {data,error}=await client.auth.getSession();
+  if(error||data.session?.user.id!==expectedOwner||!data.session.access_token)throw new ApiRequestError({code:'AUTH_REQUIRED'});
+  return {Authorization:`Bearer ${data.session.access_token}`};
+ }
+ async function invoke<T>(name:string,body:Record<string,unknown>,expectedOwner?:string):Promise<T> {
+  const headers=expectedOwner===undefined?undefined:await ownerHeaders(expectedOwner);
+  const {data,error}=await client.functions.invoke(name,{body,...(headers?{headers}:{})});
   if(error||data?.error) {
    const context=(error as {context?:Response}|null)?.context;
    throw new ApiRequestError(data?.error?data:context?await context.json().catch(()=>({})):{});
@@ -78,14 +85,16 @@ export function createServiceApi(base:SupabaseClient<Database>) {
     ...(input.locale!==undefined?{p_locale:input.locale}:{}),
    })));
   },
-  async closeAccount(){return invoke<{status:'closed'|'pending'}>('account-lifecycle',{action:'close'});},
+  async closeAccount(owner:string){return invoke<{status:'closed'|'pending'}>('account-lifecycle',{action:'close'},owner);},
   async consentStatus(){return present(checked(await client.rpc('consent_status')));},
   async recordConsent(input:{termsVersion:string;privacyVersion:string}) {
    checked(await client.rpc('record_consent',{p_terms_version:input.termsVersion,p_privacy_version:input.privacyVersion}));
   },
   async myItems(offset=0){return (checked(await client.rpc('my_items',{p_offset:offset}))??[]).map(item=>withProductPhotos(base,item));},
-  async updateItem(id:string,input:ItemInput) {
-   return withProductPhotos(base,present(checked(await client.rpc('update_my_item',{p_item_id:id,p_input:itemInput.parse(input)}))));
+  async itemForEdit(id:string){return withProductPhotos(base,present(checked(await client.rpc('get_my_item',{p_item_id:id}))));},
+  async updateItem(id:string,input:ItemInput,expectedVersion:string) {
+   if(!expectedVersion)throw new ApiRequestError({code:'PIV01'});
+   return withProductPhotos(base,present(checked(await client.rpc('update_my_item',{p_item_id:id,p_input:itemInput.parse(input),p_expected_version:expectedVersion}))));
   },
   async setItemStatus(id:string,status:'active'|'hidden') {return withProductPhotos(base,present(checked(await client.rpc('set_my_item_status',{p_item_id:id,p_status:status}))));},
   async itemAvailability(id:string){return checked(await client.rpc('item_availability',{p_item_id:id}))??[];},
@@ -104,8 +113,11 @@ export function createServiceApi(base:SupabaseClient<Database>) {
   async markNotificationRead(id:string){checked(await client.rpc('mark_notification_read',{p_id:id}));},
   async blockUser(id:string,blocked:boolean){checked(await client.rpc('set_user_block',{p_user_id:id,p_blocked:blocked}));},
   async blockedUsers(offset=0){return checked(await client.rpc('my_blocked_users',{p_offset:offset}))??[];},
-  async report(input:{userId?:string;itemId?:string;reservationId?:string;reason:'fraud'|'abuse'|'unsafe'|'prohibited'|'other';description?:string}) {
-   checked(await client.rpc('submit_report',{p_user_id:input.userId??null,p_item_id:input.itemId??null,p_reason:input.reason,p_description:input.description??null,p_reservation_id:input.reservationId??null}));
+  async report(input:{userId?:string;itemId?:string;reservationId?:string;reason:'fraud'|'abuse'|'unsafe'|'prohibited'|'other';description?:string},expectedOwner?:string) {
+   const headers=expectedOwner===undefined?undefined:await ownerHeaders(expectedOwner);
+   const command=client.rpc('submit_report',{p_user_id:input.userId??null,p_item_id:input.itemId??null,p_reason:input.reason,p_description:input.description??null,p_reservation_id:input.reservationId??null});
+   if(headers)command.setHeader('Authorization',headers.Authorization);
+   checked(await command);
   },
   async reports(offset=0){
    if(!Number.isSafeInteger(offset)||offset<0)throw new ApiRequestError({code:'INVALID_REQUEST'});

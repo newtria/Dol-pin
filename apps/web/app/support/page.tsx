@@ -15,7 +15,7 @@ export default function Support(){
 function SupportContents(){
  const {api,session,ready}=useApi();
  const queries=useQueryClient();const [description,setDescription]=useState('');
- const send=useMutation({mutationFn:()=>api.report({reason:'other',description:description.trim()}),onSuccess:()=>{setDescription('');void queries.invalidateQueries({queryKey:['reports']});}});
+ const send=useMutation({mutationFn:()=>api.report({reason:'other',description:description.trim()},session!.user.id),onSuccess:()=>{setDescription('');void queries.invalidateQueries({queryKey:['reports']});}});
  const reports=useInfiniteQuery({queryKey:['reports',session?.user.id],queryFn:({pageParam})=>api.reports(pageParam),initialPageParam:0,getNextPageParam:(rows,_pages,offset)=>rows.length===50?offset+50:undefined,enabled:!!session,refetchInterval:30000});
  if(!ready)return <p>계정을 확인하고 있습니다.</p>;
  if(!session)return <section className="flex flex-col gap-4"><h1 className="text-2xl font-bold">고객 문의</h1><Button asChild><Link href={accountHref('/support')}>로그인하고 문의 내역 보기</Link></Button></section>;

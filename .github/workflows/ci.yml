@@ -52,6 +52,8 @@ jobs:
           npm run test:rental-ux
           npm run test:catalogue
           npm run test:reservation-context
+          npm run test:item-authoring
+          npm run test:account-lifecycle
           npm run test:recovery:local
           npm run test:finance
       - name: Build consumer web
