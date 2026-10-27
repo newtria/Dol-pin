@@ -23,7 +23,10 @@ const outsider = await actor('+821055501003', '비참여자 테스트');
 const filename = `${lender.id}/${randomUUID()}.png`;
 const bytes = readFileSync('assets/demo/lightstick.png');
 assert.ifError((await lender.client.storage.from('product-photos').upload(filename, bytes, {contentType: 'image/png'})).error);
-assert.ok((await outsider.client.storage.from('product-photos').upload(`${lender.id}/${randomUUID()}.png`, bytes, {contentType: 'image/png'})).error);
+const forbiddenUpload = await outsider.client.storage.from('product-photos').upload(`${lender.id}/${randomUUID()}.png`, bytes, {contentType: 'image/png'});
+assert.ok(forbiddenUpload.error, 'foreign uploads must be rejected by the storage policy');
+assert.match(forbiddenUpload.error.message, /row-level security|permission denied/i,
+  'a gateway or transport failure must not count as an authorization rejection');
 const photo = lender.client.storage.from('product-photos').getPublicUrl(filename).data.publicUrl;
 const item = {title: '[로컬 데모] 콘서트 응원봉', description: '합성 사진을 사용한 검증용 가상 상품입니다.', category: 'lightstick', concert_id: null, photos: [photo], daily_price: 5000, deposit: 30000, pickup_method: 'direct', pickup_area: '공연장 인근', pickup_note: '거래 상대 전용 상세 장소'};
 const api=createApi(lender.client),requestId=randomUUID();

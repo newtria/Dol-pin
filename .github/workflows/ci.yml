@@ -24,6 +24,11 @@ jobs:
         env:
           PUBLIC_FILES_BASE: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
         run: |
+          # A force push can remove the previous SHA from a fresh checkout.
+          # In that case inspect the entire new history instead of skipping it.
+          if ! git cat-file -e "$PUBLIC_FILES_BASE^{commit}" 2>/dev/null; then
+            PUBLIC_FILES_BASE=0000000000000000000000000000000000000000
+          fi
           npm run check:public -- --base "$PUBLIC_FILES_BASE"
           npm run test:public
           npm run test:setup
@@ -38,6 +43,14 @@ jobs:
         run: supabase start -x vector,logflare
       - name: Rebuild schema from zero
         run: supabase db reset --local --yes
+      - name: Avoid stale gateway connections in isolated CI
+        # Local Kong can reuse a socket an upstream has already closed. POST
+        # requests then fail with 502 instead of reaching Auth/Storage/REST.
+        # Keep each request independent; do not retry mutations to hide failures.
+        run: >-
+          docker exec -e KONG_UPSTREAM_KEEPALIVE_POOL_SIZE=0
+          supabase_kong_dol-pin kong reload
+          --nginx-conf /home/kong/custom_nginx.template
       - name: Exercise database authority and RLS
         run: bash scripts/test-db.sh
       - name: Configure local clients
