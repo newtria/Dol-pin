@@ -13,11 +13,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22.22.3'
           cache: npm
       - run: npm ci
+      - name: Check public repository files
+        env:
+          PUBLIC_FILES_BASE: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
+        run: |
+          npm run check:public -- --base "$PUBLIC_FILES_BASE"
+          npm run test:public
       - uses: supabase/setup-cli@v1
         with:
           version: 2.107.0

@@ -36,6 +36,28 @@ CLAUDE.md
 .codex/
 .agents/
 
+# Public repository: working material stays local, including transcript exports.
+/scenarios/
+/research/
+/notes/
+/reports/
+/outputs/
+/artifacts/
+*.jsonl
+*.jsonl.*
+*.har
+*.log
+*.docx
+*.zst
+
+# Publish only the reviewed product/setup and bundled-asset README files.
+*.md
+*.mdx
+!/README.md
+!/apps/mobile/assets/auth/README.md
+!/legacy/flutter/README.md
+!/legacy/flutter/ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md
+
 .next-*/
 .next-qa
 

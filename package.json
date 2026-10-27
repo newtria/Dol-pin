@@ -6,6 +6,9 @@
     "packages/*"
   ],
   "scripts": {
+    "prepare": "node scripts/install-git-hooks.mjs",
+    "check:public": "node scripts/check-public-files.mjs",
+    "test:public": "node --test scripts/test-public-files.mjs",
     "mobile": "npm run start -w @dolpin/mobile",
     "web": "npm run dev -w @dolpin/web",
     "typecheck": "tsc --noEmit",
