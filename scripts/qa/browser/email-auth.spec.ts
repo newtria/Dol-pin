@@ -32,13 +32,13 @@ test('email signup validates input and explains confirmation without removing ot
 
 test('unconfirmed login offers resend and never displays provider details', async ({page}) => {
   let resent = false;
-  await page.route('**/auth/v1/token?grant_type=password', route => route.fulfill({status: 400, contentType: 'application/json', body: JSON.stringify({code: 'email_not_confirmed', msg: 'SQL private.users at /private/server.ts:42 secret=abc'})}));
+  await page.route('**/auth/v1/token?grant_type=password', route => route.fulfill({status: 400, contentType: 'application/json', headers: {'x-supabase-api-version': '2024-01-01'}, body: JSON.stringify({code: 'email_not_confirmed', msg: 'SQL private.users at /private/server.ts:42 secret=abc'})}));
   await page.route('**/auth/v1/resend', async route => {resent = true; await route.fulfill({status: 200, contentType: 'application/json', body: '{}'});});
   await page.goto('/account');
   await page.getByLabel('이메일', {exact: true}).fill('qa@example.test');
   await page.getByLabel('비밀번호', {exact: true}).fill('password');
   await page.getByRole('button', {name: '이메일 로그인', exact: true}).click();
-  await expect(page.getByRole('alert')).toContainText('이메일 확인이 필요합니다.');
+  await expect(page.getByRole('main').getByRole('alert')).toContainText('이메일 확인이 필요합니다.');
   await expect(page.getByRole('main')).not.toContainText('private.users');
   await expect(page.getByRole('main')).not.toContainText('secret=abc');
   await page.getByRole('button', {name: '확인 메일 다시 받기'}).click();
@@ -48,7 +48,7 @@ test('unconfirmed login offers resend and never displays provider details', asyn
 
 test('callback parameters cannot become user-visible error text', async ({page}) => {
   await page.goto('/auth/callback?error_description=SQL%20private.users%20secret%3Dabc');
-  await expect(page.getByRole('alert')).toContainText('다시 로그인하거나 확인 메일을 새로 받아');
+  await expect(page.getByRole('main').getByRole('alert')).toContainText('다시 로그인하거나 확인 메일을 새로 받아');
   await expect(page.getByRole('main')).not.toContainText('private.users');
   await expect(page.getByRole('main')).not.toContainText('secret=abc');
   await expect(page.getByRole('link', {name: '다시 로그인'})).toHaveAttribute('href', '/account');

@@ -82,7 +82,12 @@ Deno.serve({hostname:'127.0.0.1',port:55325},async req=>{
    }
    if(url.pathname==='/__qa/catalog'&&req.method==='POST') {
     const {tag}=await req.json();const f=fixtures.get(tag);if(!f)return new Response('Missing fixture',{status:404});
-    checked(await f.admin.from('rental_items').insert(Array.from({length:52},(_,i)=>({lender_id:f.lender.id,title:`${tag} page ${String(i).padStart(2,'0')}`,category:'lightstick',photos:f.item.photos,daily_price:5000,deposit:30000,currency:'KRW',pickup_method:'direct'}))));
+    // Listings use the same owner command as product authoring; service_role
+    // intentionally has no direct INSERT privilege on this table.
+    for(let i=0;i<52;i++)checked(await f.lender.client.rpc('create_my_item',{
+     p_request_id:crypto.randomUUID(),p_input:{title:`${f.tag} page ${String(i).padStart(2,'0')}`,category:'lightstick',photos:f.item.photos,
+      daily_price:5000,deposit:30000,pickup_method:'direct',pickup_area:'QA 공연장',pickup_note:'QA 2번 출구'},
+    }));
     const concerts=Array.from({length:54},(_,i)=>({id:crypto.randomUUID(),title:`${tag} concert ${i}`,offset:i===0?-1:i}));
     f.concertIds.push(...concerts.map(c=>c.id));
     await localSql(`INSERT INTO public.concerts(id,title,artist,venue,city,country,concert_date) VALUES ${concerts.map(c=>`('${c.id}','${c.title}','QA artist','QA venue','Seoul','KR',CURRENT_DATE+${c.offset})`).join(',')};`);
