@@ -50,13 +50,8 @@ CLAUDE.md
 *.docx
 *.zst
 
-# Publish only the reviewed product/setup and bundled-asset README files.
-*.md
-*.mdx
-!/README.md
-!/apps/mobile/assets/auth/README.md
-!/legacy/flutter/README.md
-!/legacy/flutter/ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md
+# Public README, CONTRIBUTING, changelog and product Markdown/MDX files are
+# allowed. Keep internal material in the excluded working directories above.
 
 .next-*/
 .next-qa

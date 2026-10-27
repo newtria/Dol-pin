@@ -26,6 +26,7 @@ jobs:
         run: |
           npm run check:public -- --base "$PUBLIC_FILES_BASE"
           npm run test:public
+          npm run test:setup
       - uses: supabase/setup-cli@v1
         with:
           version: 2.107.0

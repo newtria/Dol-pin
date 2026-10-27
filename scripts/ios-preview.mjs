@@ -42,7 +42,7 @@ if(mode==='build'){
  const podEnv={...process.env,SDKROOT:capture('xcrun',['--sdk','macosx','--show-sdk-path'])};
  run('pod',['install'],join(mobile,'ios'),podEnv);
  // Keep Xcode's simulator signing: disabling it breaks SecureStore entitlements.
- run('xcodebuild',['-workspace',join(mobile,'ios/dolpin.xcworkspace'),'-scheme','dolpin','-configuration','Release','-sdk','iphonesimulator','-destination','generic/platform=iOS Simulator','-derivedDataPath',buildRoot,'ARCHS=arm64','CODE_SIGNING_ALLOWED=YES','CODE_SIGN_IDENTITY=-','build']);
+ run('xcodebuild',['-workspace',join(mobile,'ios/dolpin.xcworkspace'),'-scheme','dolpin','-configuration','Release','-sdk','iphonesimulator','-destination','generic/platform=iOS Simulator','-derivedDataPath',buildRoot,`ARCHS=${process.arch==='arm64'?'arm64':'x86_64'}`,'CODE_SIGNING_ALLOWED=YES','CODE_SIGN_IDENTITY=-','build']);
  if(!existsSync(join(app,'main.jsbundle')))throw new Error('Preview must contain its own JS bundle.');
  console.log(`Standalone preview: ${app}`);
  }finally{restoreRuntime?.();}

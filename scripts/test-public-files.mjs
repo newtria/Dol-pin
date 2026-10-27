@@ -26,8 +26,10 @@ function fixture(t) {
 
 test('published README and templates pass while local notes stay untracked',t=>{
  const f=fixture(t);f.write('apps/web/.env.example','NEXT_PUBLIC_SUPABASE_URL=https://example.invalid\n');
+ const publicDocs=['CONTRIBUTING.md','.github/CONTRIBUTING.md','apps/web/README.md','CHANGELOG.md','apps/web/help.mdx'];
+ for(const path of publicDocs)f.write(path,'Public developer or product documentation\n');
  f.write('notes/research.md','Local working notes');f.write('session.jsonl.zst','Local transcript');
- f.git('add','apps/web/.env.example');f.commit('Add a public configuration template');
+ f.git('add','apps/web/.env.example',...publicDocs);f.commit('Add public templates and documentation');
  const r=f.check(['--base',f.base]);assert.equal(r.status,0,r.stderr);
  assert.ok(existsSync(join(f.cwd,'notes/research.md')));
  assert.equal(f.git('ls-files','notes/research.md','session.jsonl.zst'),'');
@@ -76,9 +78,9 @@ test('the actual pre-push hook rejects leaked history for existing and new remot
 });
 
 test('pushing another branch or annotated tag checks its tree even with no unpublished commits',t=>{
- const f=fixture(t);f.write('private.md','Historical working material');f.git('add','-f','private.md');f.commit('Historical publication');
+ const f=fixture(t);f.write('notes/private.md','Historical working material');f.git('add','-f','notes/private.md');f.commit('Historical publication');
  const old=f.git('rev-parse','HEAD');f.git('tag','-a','old-tag','-m','Historical tag');
- const tag=f.git('rev-parse','old-tag');f.git('rm','private.md');f.commit('Clean current branch');
+ const tag=f.git('rev-parse','old-tag');f.git('rm','notes/private.md');f.commit('Clean current branch');
  f.git('update-ref','refs/remotes/origin/main','HEAD');
  for(const head of [old,tag]) {
   const result=f.check(['--pre-push','origin','unused'],`refs/heads/other ${head} refs/heads/other ${'0'.repeat(40)}\n`);
@@ -87,7 +89,7 @@ test('pushing another branch or annotated tag checks its tree even with no unpub
 });
 
 test('unrelated staged material does not block a clean outgoing ref',t=>{
- const f=fixture(t);f.write('private.md','Uncommitted notes');f.git('add','-f','private.md');
+ const f=fixture(t);f.write('notes/private.md','Uncommitted notes');f.git('add','-f','notes/private.md');
  const result=f.check(['--pre-push','origin','unused'],`refs/heads/main ${f.base} refs/heads/main ${f.base}\n`);
  assert.equal(result.status,0,result.stderr);
  assert.equal(f.check().status,1);
