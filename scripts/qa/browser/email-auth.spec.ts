@@ -31,11 +31,15 @@ test('email signup validates input and explains confirmation without removing ot
 });
 
 test('unconfirmed login offers resend and never displays provider details', async ({page}) => {
-  let resent = false;
+  let resendPayload: Record<string, unknown> | undefined;
   // Auth is cross-origin, so the SDK must be allowed to read the version
   // header before it can interpret the modern `code` response field.
   await page.route('**/auth/v1/token?grant_type=password', route => route.fulfill({status: 400, contentType: 'application/json', headers: {'x-supabase-api-version': '2024-01-01', 'access-control-expose-headers': 'x-supabase-api-version'}, body: JSON.stringify({code: 'email_not_confirmed', msg: 'SQL private.users at /private/server.ts:42 secret=abc'})}));
-  await page.route('**/auth/v1/resend', async route => {resent = true; await route.fulfill({status: 200, contentType: 'application/json', body: '{}'});});
+  // The SDK appends redirect_to, so match the pathname independently of query parameters.
+  await page.route(url => url.pathname === '/auth/v1/resend', async route => {
+    resendPayload = route.request().postDataJSON();
+    await route.fulfill({status: 200, contentType: 'application/json', body: '{}'});
+  });
   await page.goto('/account');
   await page.getByLabel('이메일', {exact: true}).fill('qa@example.test');
   await page.getByLabel('비밀번호', {exact: true}).fill('password');
@@ -45,7 +49,7 @@ test('unconfirmed login offers resend and never displays provider details', asyn
   await expect(page.getByRole('main')).not.toContainText('secret=abc');
   await page.getByRole('button', {name: '확인 메일 다시 받기'}).click();
   await expect(page.getByRole('status')).toContainText('확인 메일을 다시 보냈습니다.');
-  expect(resent).toBe(true);
+  expect(resendPayload).toMatchObject({type: 'signup', email: 'qa@example.test'});
 });
 
 test('callback parameters cannot become user-visible error text', async ({page}) => {
