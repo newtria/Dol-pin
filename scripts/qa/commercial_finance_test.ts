@@ -86,9 +86,11 @@ Deno.test('commercial finance: operator authority, partial dispute, private payo
     assert(!('payment_id' in detail.data.reservation) && !('token_hash' in detail.data.reservation), 'investigation disclosed payment credentials');
     assert(checked(await f.admin.from('finance_operator_audit').select('id').eq('reservation_id', r.id).eq('action', 'view_rental')).length === 1, 'investigation read was not audited');
     assert((await call(finance, operatorToken, { action: 'rental', reservationId: crypto.randomUUID() })).code === 404, 'missing investigation was not a safe not-found response');
-    checked(await f.admin.from('users').update({ suspended_at: new Date().toISOString() }).eq('id', f.outsider.id));
+    // Account lifecycle fields are command-only, including for service_role.
+    // Seed the exceptional state through the isolated fixture database.
+    await localSql(`UPDATE public.users SET suspended_at=now() WHERE id='${f.outsider.id}';`);
     assert((await call(finance, operatorToken, { action: 'rental', reservationId: r.id })).code === 403, 'suspended operator retained investigation access');
-    checked(await f.admin.from('users').update({ suspended_at: null }).eq('id', f.outsider.id));
+    await localSql(`UPDATE public.users SET suspended_at=NULL WHERE id='${f.outsider.id}';`);
     assert((await f.lender.client.rpc('confirm_rental_pickup', { p_reservation_id: r.id })).error, 'disputed rental allowed pickup');
     const body = { action: 'resolveDispute', reservationId: r.id, refundAmount: 32000, reason: '양측 증빙을 대조하여 부분 환불을 결정했습니다.' };
     assert((await call(finance, f.borrower.session.access_token, body)).code === 403, 'participant resolved their own dispute');
@@ -229,7 +231,7 @@ Deno.test('legacy verification: lost database response never triggers a refund; 
     assert((await call(verify, f.borrower.session.access_token, { imp_uid: `qa-${r.id}` })).code === 409, 'partial refund was advertised as a cancelled rental');
     refunded = r.total_paid; providerStatus = 'cancelled';
     assert((await call(verify, f.borrower.session.access_token, { imp_uid: `qa-${r.id}` })).data.reservation_status === 'cancelled', 'matching full refund did not reconcile');
-    checked(await f.admin.from('users').update({ deleted_at: new Date().toISOString() }).eq('id', f.borrower.id));
+    await localSql(`UPDATE public.users SET deleted_at=now() WHERE id='${f.borrower.id}';`);
     const beforeDeletedRead = lookupCount;
     assert((await call(verify, f.borrower.session.access_token, { imp_uid: `qa-${r.id}` })).code === 403 && lookupCount === beforeDeletedRead, 'deleted account JWT reached provider verification');
   } finally { globalThis.fetch = originalFetch; await f.cleanup(); }
