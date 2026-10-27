@@ -15,7 +15,7 @@ Supabase CLI 2.107.0 이상이 필요합니다. 별도의 Supabase 클라우드 
 이전 개발자의 `.env`, 외장 디스크, 절대 경로 설정은 필요하지 않습니다.
 
 ```bash
-git clone https://github.com/heznpc/Dol-pin.git
+git clone https://github.com/newtria/Dol-pin.git
 cd Dol-pin
 npm ci
 npm run setup:local
